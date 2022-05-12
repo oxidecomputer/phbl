@@ -15,8 +15,9 @@ SECTIONS {
 		*(.start.rodata)
 	}
 	.reset resetaddr : {
+		FILL(0xffffffff);
 		*(.reset)
-		PROVIDE(__eloader = .);
+		__eloader = ALIGN(65536);
 	}
 
 	.bss ((ADDR(.start) - bsssize) & ~0xFFF) : {
@@ -37,7 +38,7 @@ SECTIONS {
 	}
 
 	.text ((ADDR(.rodata) - textsize) & ~0xFFF) : {
-		PROVIDE(__sloader = .);
+		__sloader = .;
 		FILL(0xffffffff);
 		*(.text*)
 		etext = ALIGN(4096);
@@ -47,6 +48,8 @@ SECTIONS {
 	rodatasize = SIZEOF(.rodata);
 	datasize = SIZEOF(.data);
 	bsssize = SIZEOF(.bss);
+
+	_BL_SPACE = __eloader - __sloader;
 
 	/DISCARD/ : {
 		*(.got* .comment* .note* .eh_frame*)

@@ -8,3 +8,21 @@ license = "MPL-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bitstruct = "0.1"
+goblin = { version = "0.5.1", default-features = false, features = [
+    "endian_fd",
+    "elf64",
+    "elf32",
+    "alloc",
+] }
+miniz_oxide = "0.5.1"
+once_cell = { version = "1.1", default-features = false, features = ["race"] }
+seq-macro = "0.3"
+static_assertions = "1.1"
+x86 = "0.47"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"

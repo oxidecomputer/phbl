@@ -36,7 +36,7 @@ impl BuildProfile {
     /// Extracts the build profile type from the given matched
     /// arguments.  Debug is the default.
     fn matched_type(matches: &clap::ArgMatches) -> BuildProfile {
-        if matches.is_present("release") {
+        if matches.contains_id("release") {
             BuildProfile::Release
         } else {
             BuildProfile::Debug
@@ -49,9 +49,11 @@ fn main() {
     match matches.subcommand() {
         Some(("build", m)) => build(BuildProfile::matched_type(m)),
         Some(("test", m)) => test(BuildProfile::matched_type(m)),
-        Some(("disasm", m)) => {
-            disasm(BuildProfile::matched_type(m), m.is_present("source").then_some("-S"))
-        }
+        Some(("disasm", m)) => disasm(
+            BuildProfile::matched_type(m),
+            m.contains_id("source").then_some("-S"),
+        ),
+        Some(("expand", _m)) => expand(),
         Some(("clippy", _m)) => clippy(),
         Some(("clean", _m)) => clean(),
         _ => {
@@ -67,20 +69,35 @@ fn parse_args() -> clap::ArgMatches {
         .version("0.1.0")
         .author("Oxide Computer Company")
         .about("xtask build tool for pico host boot loader")
-        .subcommand(clap::Command::new("build").about("Builds phbl").args(&[
-            clap::arg!(--release "Build optimized version").conflicts_with("debug"),
-            clap::arg!(--debug "Build debug version (default)").conflicts_with("release"),
-        ]))
-        .subcommand(clap::Command::new("test").about("Run unit tests").args(&[
-            clap::arg!(--release "Test optimized version").conflicts_with("debug"),
-            clap::arg!(--debug "Test debug version (default)").conflicts_with("release"),
-        ]))
-        .subcommand(clap::Command::new("disasm").about("disassemble phbl").args(&[
-            clap::arg!(--release "Disassemble optimized version").conflicts_with("debug"),
-            clap::arg!(--debug "Disassemble debug version (default)").conflicts_with("release"),
-            clap::arg!(--source "Interleave source and assembler output"),
-        ]))
-        .subcommand(clap::Command::new("clippy").about("Run cargo clippy linter"))
+        .subcommand(
+            clap::Command::new("build").about("Builds phbl").args(&[
+                clap::arg!(--release "Build optimized version")
+                    .conflicts_with("debug"),
+                clap::arg!(--debug "Build debug version (default)")
+                    .conflicts_with("release"),
+            ]),
+        )
+        .subcommand(
+            clap::Command::new("test").about("Run unit tests").args(&[
+                clap::arg!(--release "Test optimized version")
+                    .conflicts_with("debug"),
+                clap::arg!(--debug "Test debug version (default)")
+                    .conflicts_with("release"),
+            ]),
+        )
+        .subcommand(
+            clap::Command::new("disasm").about("disassemble phbl").args(&[
+                clap::arg!(--release "Disassemble optimized version")
+                    .conflicts_with("debug"),
+                clap::arg!(--debug "Disassemble debug version (default)")
+                    .conflicts_with("release"),
+                clap::arg!(--source "Interleave source and assembler output"),
+            ]),
+        )
+        .subcommand(clap::Command::new("expand").about("Expand macros"))
+        .subcommand(
+            clap::Command::new("clippy").about("Run cargo clippy linter"),
+        )
         .subcommand(clap::Command::new("clean").about("cargo clean"))
         .get_matches()
 }
@@ -89,7 +106,12 @@ fn parse_args() -> clap::ArgMatches {
 fn build(profile: BuildProfile) {
     let build_type = profile.build_type().unwrap_or("");
     let target = target();
-    let args = format!("build {build_type} -Z build-std=core,alloc --target {target}.json");
+    let args = format!(
+        "build {build_type} \
+            -Z build-std=core,alloc \
+            -Z build-std-features=compiler-builtins-mem \
+            --target {target}.json"
+    );
     cmd(cargo(), args.split_whitespace()).run().expect("build successful");
 }
 
@@ -110,7 +132,16 @@ fn disasm(profile: BuildProfile, flags: Option<&str>) {
     let profile_dir = profile.dir().to_str().unwrap();
     let flags = flags.unwrap_or("");
     let args = format!("-Cd {flags} target/{triple}/{profile_dir}/phbl");
-    cmd(objdump(), args.split_whitespace()).run().expect("disassembly successful");
+    cmd(objdump(), args.split_whitespace())
+        .run()
+        .expect("disassembly successful");
+}
+
+/// Expands macros.
+fn expand() {
+    cmd!(cargo(), "rustc", "--", "-Zunpretty=expanded")
+        .run()
+        .expect("expand successful");
 }
 
 /// Runs the Clippy linter.
@@ -136,7 +167,7 @@ fn cargo() -> String {
 
 /// Returns the target triple we are building for.
 fn target() -> String {
-    env_or("TARGET", "x86_64-oxide-elf")
+    env_or("TARGET", "x86_64-oxide-none-elf")
 }
 
 /// Locates the LLVM objdump binary.

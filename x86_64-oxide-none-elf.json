@@ -9,17 +9,19 @@
 	"os": "none",
 	"vendor": "oxide",
 	"executables": true,
-	"relocation-model": "pie",
+	"relocation-model": "static",
 	"code-model": "small",
 	"frame-pointer": "always",
 	"disable-redzone": true,
 	"features": "-3dnow,-3dnowa,-avx,-avx2,-avx512bf16,-f16c,-fxsr,-mmx,-sse,-sse2,-sse3,-sse4.1,-sse4.2,-sse4a,-ssse3,-x87,-soft-float",
 	"linker-flavor": "ld",
 	"linker": "gld",
+	"no-default-libraries": "true",
 	"pre-link-args": {
 		"ld": [
 			"-nostdlib",
-			"-Tsrc/phbl.ld"
+			"-Tsrc/phbl.ld",
+			"-zmax-page-size=4096"
 		],
 		"ld.lld": [
 			"-nostdlib",
