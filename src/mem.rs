@@ -42,6 +42,7 @@ impl V4KA {
     /// The alignment factor.
     pub(crate) const ALIGN: usize = 4096;
     pub(crate) const MASK: usize = Self::ALIGN - 1;
+    pub(crate) const SIZE: usize = Self::ALIGN;
 
     /// Returns a new V4KA constructed from the given virtual
     /// address, which must be both canonical and properly

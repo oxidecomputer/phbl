@@ -410,7 +410,7 @@ const_assert_eq!(core::mem::size_of::<MmioWrite>(), 256);
 #[repr(usize)]
 pub enum Device {
     Uart0 = UART_MMIO_BASE_ADDR,
-    Uart1 = UART_MMIO_BASE_ADDR + 0x1000,
+    _Uart1 = UART_MMIO_BASE_ADDR + 0x1000,
     _Uart2 = UART_MMIO_BASE_ADDR + 0x5000,
     _Uart3 = UART_MMIO_BASE_ADDR + 0x6000,
 }
@@ -459,11 +459,6 @@ impl Uart {
     pub fn uart0() -> Uart {
         assert!(UART0_INITED.get().unwrap());
         Uart(Device::Uart0)
-    }
-
-    pub fn uart1() -> Uart {
-        assert!(UART1_INITED.get().unwrap());
-        Uart(Device::Uart1)
     }
 
     pub(crate) fn addr(&self) -> usize {
@@ -522,9 +517,7 @@ pub fn init() {
     UART0_INITED.get_or_init(|| {
         Device::Uart0.init(Rate::B3M, Datas::Bits8, Stops::Stop1, Parity::No)
     });
-    UART1_INITED.get_or_init(|| {
-        Device::Uart1.init(Rate::B3M, Datas::Bits8, Stops::Stop1, Parity::No)
-    });
+    UART1_INITED.set(false).unwrap();
     UART2_INITED.set(false).unwrap();
     UART3_INITED.set(false).unwrap();
 }

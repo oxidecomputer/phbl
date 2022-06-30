@@ -49,9 +49,7 @@ core::arch::global_asm!(include_str!("start.S"), options(att_syntax));
 /// The loader configuration, consumed by the rest of PHBL.
 pub(crate) struct Config {
     pub(crate) cons: Uart,
-    pub(crate) spchan: Uart,
     pub(crate) loader_region: Range<mem::V4KA>,
-    pub(crate) mmio_region: Range<mem::V4KA>,
     pub(crate) page_table: mmu::LoaderPageTable,
 }
 
@@ -59,13 +57,9 @@ impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         writeln!(f, "Config {{")?;
         writeln!(f, "    cons:   Uart({:x}),", self.cons.addr())?;
-        writeln!(f, "    spchan: Uart({:x}),", self.spchan.addr())?;
         let vstart = self.loader_region.start.addr();
         let vend = self.loader_region.end.addr();
         writeln!(f, "    loader: {:#x?}", vstart..vend)?;
-        let vstart = self.mmio_region.start.addr();
-        let vend = self.mmio_region.end.addr();
-        writeln!(f, "    mmio: {:#x?}", vstart..vend)?;
         writeln!(f, "    pageroot: P4KA({:#x}),", self.page_table.phys_addr())?;
         write!(f, "}}")
     }
@@ -88,15 +82,14 @@ pub(crate) unsafe extern "C" fn init(bist: u32) -> &'static mut Config {
     if bist != 0 {
         panic!("bist failed: {:#x}", bist);
     }
-    let page_table = remap();
+    let cons = Uart::uart0();
+    let page_table = remap(mem::V4KA::new(cons.addr()));
     let loader_region = text_addr()..eaddr();
     let mmio_region = mmio_addr()..mmio_end();
-    let reserved_regions = [loader_region.clone(), mmio_region.clone()];
+    let reserved_regions = [loader_region.clone(), mmio_region];
     let config = Box::new(Config {
-        cons: Uart::uart0(),
-        spchan: Uart::uart1(),
+        cons,
         loader_region,
-        mmio_region,
         page_table: mmu::LoaderPageTable::new(page_table, &reserved_regions),
     });
     Box::leak(config)
@@ -153,12 +146,14 @@ fn bootblock_addr() -> mem::V4KA {
     mem::V4KA::new(unsafe { bootblock.as_ptr() as usize })
 }
 
-/// Returns the address of the start of the MMIO region.
+/// Returns the address of the start of the MMIO region
+/// containing the UART.
 fn mmio_addr() -> mem::V4KA {
     mem::V4KA::new(0x8000_0000)
 }
 
-/// Returns the address of the end of the MMIO region.
+/// Returns the address of the end of the MMIO region containing
+/// the UART.
 fn mmio_end() -> mem::V4KA {
     mem::V4KA::new(0x1_0000_0000)
 }
@@ -169,14 +164,15 @@ fn mmio_end() -> mem::V4KA {
 /// rw- and uncached.  This remaps the loader and MMIO space
 /// properly, enforcing appropriate protections for sections
 /// and so on.
-fn remap() -> &'static mut mmu::PageTable {
+fn remap(cons_addr: mem::V4KA) -> &'static mut mmu::PageTable {
     let text = text_addr()..rodata_addr();
     let rodata = rodata_addr()..data_addr();
     let data = data_addr()..bss_addr();
     let bss = bss_addr()..end_addr();
     let boot = bootblock_addr()..eaddr();
 
-    let mmio = mmio_addr()..mmio_end();
+    let cons_end = mem::V4KA::new(cons_addr.addr() + mem::V4KA::SIZE);
+    let cons = cons_addr..cons_end;
 
     let regions = &[
         mem::Region::new(text, mem::Attrs::new_text()),
@@ -184,7 +180,7 @@ fn remap() -> &'static mut mmu::PageTable {
         mem::Region::new(data, mem::Attrs::new_data()),
         mem::Region::new(bss, mem::Attrs::new_bss()),
         mem::Region::new(boot, mem::Attrs::new_rodata()),
-        mem::Region::new(mmio, mem::Attrs::new_mmio()),
+        mem::Region::new(cons, mem::Attrs::new_mmio()),
     ];
     let page_table = mmu::PageTable::new();
     unsafe {
