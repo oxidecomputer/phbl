@@ -16,6 +16,16 @@ enum BuildProfile {
 }
 
 impl BuildProfile {
+    /// Returns a new BuildProfile constructed from the
+    /// given args.
+    fn new(matches: &clap::ArgMatches) -> BuildProfile {
+        if matches.contains_id("release") {
+            BuildProfile::Release
+        } else {
+            BuildProfile::Debug
+        }
+    }
+
     /// Returns the subdirectory component corresponding
     /// to the build type.
     fn dir(self) -> &'static Path {
@@ -33,26 +43,34 @@ impl BuildProfile {
             Self::Debug => None,
         }
     }
+}
+
+/// Build arguments including path to the compressed
+/// cpio archive we use as a "ramdisk
+#[derive(Clone, Debug)]
+struct BuildArgs {
+    profile: BuildProfile,
+    cpioz: String,
+}
+
+impl BuildArgs {
     /// Extracts the build profile type from the given matched
     /// arguments.  Debug is the default.
-    fn matched_type(matches: &clap::ArgMatches) -> BuildProfile {
-        if matches.contains_id("release") {
-            BuildProfile::Release
-        } else {
-            BuildProfile::Debug
-        }
+    fn new(matches: &clap::ArgMatches) -> BuildArgs {
+        let profile = BuildProfile::new(matches);
+        let cpioz = matches.get_one::<String>("cpioz").unwrap().to_string();
+        BuildArgs { profile, cpioz }
     }
 }
 
 fn main() {
     let matches = parse_args();
     match matches.subcommand() {
-        Some(("build", m)) => build(BuildProfile::matched_type(m)),
-        Some(("test", m)) => test(BuildProfile::matched_type(m)),
-        Some(("disasm", m)) => disasm(
-            BuildProfile::matched_type(m),
-            m.contains_id("source").then_some("-S"),
-        ),
+        Some(("build", m)) => build(BuildArgs::new(m)),
+        Some(("test", m)) => test(BuildProfile::new(m)),
+        Some(("disasm", m)) => {
+            disasm(BuildArgs::new(m), m.contains_id("source").then_some("-S"))
+        }
         Some(("expand", _m)) => expand(),
         Some(("clippy", _m)) => clippy(),
         Some(("clean", _m)) => clean(),
@@ -75,6 +93,9 @@ fn parse_args() -> clap::ArgMatches {
                     .conflicts_with("debug"),
                 clap::arg!(--debug "Build debug version (default)")
                     .conflicts_with("release"),
+                clap::arg!(--cpioz "Path to compressed CPIO archive")
+                    .takes_value(true)
+                    .required(true),
             ]),
         )
         .subcommand(
@@ -92,6 +113,9 @@ fn parse_args() -> clap::ArgMatches {
                 clap::arg!(--debug "Disassemble debug version (default)")
                     .conflicts_with("release"),
                 clap::arg!(--source "Interleave source and assembler output"),
+                clap::arg!(--cpioz "Path to compressed CPIO archive")
+                    .takes_value(true)
+                    .default_value("/dev/null"),
             ]),
         )
         .subcommand(clap::Command::new("expand").about("Expand macros"))
@@ -103,8 +127,9 @@ fn parse_args() -> clap::ArgMatches {
 }
 
 /// Runs a cross-compiled build.
-fn build(profile: BuildProfile) {
-    let build_type = profile.build_type().unwrap_or("");
+fn build(args: BuildArgs) {
+    std::env::set_var("PHBL_PHASE1_COMPRESSED_CPIO_ARCHIVE_PATH", args.cpioz);
+    let build_type = args.profile.build_type().unwrap_or("");
     let target = target();
     let args = format!(
         "build {build_type} \
@@ -126,10 +151,10 @@ fn test(profile: BuildProfile) {
 }
 
 /// Build and disassemble the phbl binary.
-fn disasm(profile: BuildProfile, flags: Option<&str>) {
-    build(profile);
+fn disasm(build_args: BuildArgs, flags: Option<&str>) {
+    build(build_args.clone());
     let triple = target();
-    let profile_dir = profile.dir().to_str().unwrap();
+    let profile_dir = build_args.profile.dir().to_str().unwrap();
     let flags = flags.unwrap_or("");
     let args = format!("-Cd {flags} target/{triple}/{profile_dir}/phbl");
     cmd(objdump(), args.split_whitespace())

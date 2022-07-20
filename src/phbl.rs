@@ -84,9 +84,10 @@ pub(crate) unsafe extern "C" fn init(bist: u32) -> &'static mut Config {
     }
     let cons = Uart::uart0();
     let page_table = remap(mem::V4KA::new(cons.addr()));
+    let cpio_region = cpio_addr()..text_addr();
     let loader_region = text_addr()..eaddr();
     let mmio_region = mmio_addr()..mmio_end();
-    let reserved_regions = [loader_region.clone(), mmio_region];
+    let reserved_regions = [loader_region.clone(), cpio_region, mmio_region];
     let config = Box::new(Config {
         cons,
         loader_region,
@@ -106,6 +107,12 @@ extern "C" {
     static bootblock: [u8; 0];
 
     pub fn dnr() -> !;
+}
+
+/// Returns the address of the start of the cpio archive region.
+fn cpio_addr() -> mem::V4KA {
+    const CPIO_LEN: usize = 128 * mem::MIB;
+    mem::V4KA::new(text_addr().addr() - CPIO_LEN)
 }
 
 /// Returns the address of the start of the loader text segment.
@@ -158,6 +165,21 @@ fn mmio_end() -> mem::V4KA {
     mem::V4KA::new(0x1_0000_0000)
 }
 
+/// Returns a mutable slice over the cpio archive region.
+/// Clears the region.
+pub(crate) fn ramdisk_region_init_mut() -> &'static mut [u8] {
+    let cpio = cpio_addr().addr();
+    let text = text_addr().addr();
+    const PHBL_MIN: usize = 2 * mem::GIB - 256 * mem::MIB;
+    assert!(PHBL_MIN < cpio && cpio < text);
+    let len = text - cpio;
+    let cpio = cpio as *mut u8;
+    unsafe {
+        core::ptr::write_bytes(cpio, 0, len);
+        core::slice::from_raw_parts_mut(cpio, len)
+    }
+}
+
 /// When the loader enters Rust code, we know that we have a
 /// minimal virtual memory environment where the loader itself
 /// is mapped rwx, and the UART registers region is mapped
@@ -165,6 +187,7 @@ fn mmio_end() -> mem::V4KA {
 /// properly, enforcing appropriate protections for sections
 /// and so on.
 fn remap(cons_addr: mem::V4KA) -> &'static mut mmu::PageTable {
+    let cpio = cpio_addr()..text_addr();
     let text = text_addr()..rodata_addr();
     let rodata = rodata_addr()..data_addr();
     let data = data_addr()..bss_addr();
@@ -175,6 +198,7 @@ fn remap(cons_addr: mem::V4KA) -> &'static mut mmu::PageTable {
     let cons = cons_addr..cons_end;
 
     let regions = &[
+        mem::Region::new(cpio, mem::Attrs::new_data()),
         mem::Region::new(text, mem::Attrs::new_text()),
         mem::Region::new(rodata, mem::Attrs::new_rodata()),
         mem::Region::new(data, mem::Attrs::new_data()),

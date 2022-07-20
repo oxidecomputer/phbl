@@ -12,7 +12,7 @@ use goblin::elf::program_header::PT_LOAD;
 use goblin::elf::ProgramHeader;
 use goblin::elf::{self, Elf};
 
-type Thunk = unsafe extern "C" fn();
+type Thunk = unsafe extern "C" fn(ramdisk_addr: u64, ramdisk_len: usize);
 
 /// Loads an executable image contained in the given byte slice,
 /// creating virtual mappings as required.  Returns the image's

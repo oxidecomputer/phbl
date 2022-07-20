@@ -1,5 +1,9 @@
 use core::ops::Range;
 
+pub(crate) const KIB: usize = 1024;
+pub(crate) const MIB: usize = 1024 * KIB;
+pub(crate) const GIB: usize = 1024 * MIB;
+
 /// A V4KA represents a 4KiB aligned, canonical virtual memory
 /// address.  The address may or may not be mapped.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
