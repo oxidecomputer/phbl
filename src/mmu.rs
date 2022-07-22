@@ -1085,6 +1085,14 @@ impl LoaderPageTable {
         if Self::overlaps(&self.reserved, &range) {
             return Err("range overlaps reserved regions");
         }
+        let len = range.end.addr().wrapping_sub(range.start.addr());
+        let phys_addr = pa.phys_addr() as usize;
+        let pstart = mem::V4KA::new(phys_addr);
+        let pend = mem::V4KA::new(phys_addr.wrapping_add(len));
+        let prange = pstart..pend;
+        if Self::overlaps(&self.reserved, &prange) {
+            return Err("physical range overlaps reserved regions");
+        }
         let region = mem::Region::new(range, attrs);
         unsafe {
             self.page_table.map_region(&region, pa);
@@ -1102,13 +1110,10 @@ impl LoaderPageTable {
     /// first convert the ranges to closed, inclusive ranges.
     fn overlaps(rs: &[Range<mem::V4KA>], a: &Range<mem::V4KA>) -> bool {
         let aa = a.start.addr()..=(a.end.addr().wrapping_sub(1));
-        for range in rs {
+        rs.into_iter().any(|range| {
             let rr = range.start.addr()..=(range.end.addr().wrapping_sub(1));
-            if rr.contains(aa.start()) || aa.contains(rr.start()) {
-                return true;
-            }
-        }
-        false
+            rr.contains(aa.start()) || aa.contains(rr.start())
+        })
     }
 
     /// Returns the physical address of the page table root.
