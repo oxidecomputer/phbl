@@ -1137,7 +1137,7 @@ mod loader_page_table_tests {
                 .map_region(
                     region,
                     mem::Attrs::new_text(),
-                    mem::P4KA::new(0x1000),
+                    mem::P4KA::new(0x8000),
                 )
                 .is_ok()
         });
