@@ -350,7 +350,7 @@ bitstruct! {
     /// hierarchy.  Note that the loader only uses a small subset
     /// of paging functionality, so we don't define every bit
     /// defined by the hardware.
-    ///s
+    ///
     /// Bit 11 is special.  This is one of the architecturally
     /// "ignored" bits available for use by system software; we
     /// use it as part of the contract with the host operating
@@ -369,7 +369,7 @@ bitstruct! {
         nc: bool = 4;
         // a: bool = 5;
         // d: bool = 6;
-        h: bool = 7;
+        h: bool = 7;  // Large or Huge page.
         // g: bool = 8;
         //ign: u8 = 9..12;
         k: bool = 11;
@@ -487,7 +487,7 @@ trait Table: Sized {
     type MappingType: Mapping;
 
     /// The number of bits required to shift a virtual address
-    /// to find it's index in a table of this type.
+    /// to find its index in a table of this type.
     const INDEX_SHIFT: usize;
 
     /// Creates a new table of the current type.  This is
@@ -843,7 +843,7 @@ impl PageTable {
     }
 
     /// Maps a single region of virtual address space to some
-    /// region of contiguous physical address space.  Handles
+    /// region of contiguous physical address space.  Permits
     /// mapping at the end of the address range.
     unsafe fn map_region(&mut self, region: &mem::Region, pa: mem::P4KA) {
         let mut start = region.start().addr();

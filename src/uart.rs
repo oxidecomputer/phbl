@@ -191,7 +191,7 @@ impl bitstruct::IntoRaw<u8, Parity> for Lcr {
     fn into_raw(parity: Parity) -> u8 {
         match parity {
             Parity::No => 0b00,
-            Parity::DisabledEven => 0b11,
+            Parity::DisabledEven => 0b01,
             Parity::Odd => 0b10,
             Parity::Even => 0b11,
         }
@@ -271,7 +271,7 @@ impl ConfigMmio {
     fn set_rate(&mut self, rate: Rate) {
         const SCLK: u32 = 48_000_000;
         let divisor = SCLK / (16 * rate as u32);
-        let dll = Dll(divisor);
+        let dll = Dll(divisor & 0xFF);
         let dlh = Dlh(divisor >> 8);
         unsafe {
             let lcr = self.lcr().with_dlab(true);
@@ -343,8 +343,7 @@ struct MmioRead {
     _lpdlh: u32,      // 0x24
     _res0: u32,       // 0x28
     _res1: u32,       // 0x2C
-    _srbr: [u32; 8],  // 0x30 - 0x4C
-    _sthr: [u32; 8],  // 0x50 - 0x6C
+    _sdat: [u32; 16], // 0x30 - 0x6C    // srbr and sthr
     _far: u32,        // 0x70
     _tfr: u32,        // 0x74
     _rfw: u32,        // 0x78
@@ -381,8 +380,7 @@ struct MmioWrite {
     _lpdlh: u32,      // 0x24
     _res0: u32,       // 0x28
     _res1: u32,       // 0x2C
-    _srbr: [u32; 8],  // 0x30 - 0x4C
-    _sthr: [u32; 8],  // 0x50 - 0x6C
+    _sdat: [u32; 16], // 0x30 - 0x6C    // srbr and sthr
     _far: u32,        // 0x70
     _tfr: u32,        // 0x74
     _rfw: u32,        // 0x78
@@ -421,7 +419,8 @@ static UART2_INITED: OnceBool = OnceBool::new();
 static UART3_INITED: OnceBool = OnceBool::new();
 
 impl Device {
-    /// Returns the virtual address of the
+    /// Returns the base virtual address of the device's
+    /// MMIO region.
     fn addr(self) -> usize {
         self as usize
     }
@@ -472,6 +471,10 @@ impl Uart {
         unsafe { &mut *regs }
     }
 
+    // Note that reading from the device alters its state.  We
+    // model that by returning a mut ref.  This also means that
+    // it is mutually exclusive with a write MMIO structure,
+    // as the two share the same register space.
     fn read_mmio_mut(&mut self) -> &mut MmioRead {
         const NULL: *mut MmioRead = core::ptr::null_mut();
         let regs = NULL.with_addr(self.0.addr());
