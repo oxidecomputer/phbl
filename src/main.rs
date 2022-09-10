@@ -40,9 +40,9 @@ fn expand_ramdisk() -> &'static [u8] {
     use miniz_oxide::inflate::core::DecompressorOxide;
     use miniz_oxide::inflate::TINFLStatus;
 
-    #[cfg(target_arch = "x86_64-oxide-none-elf")]
+    #[cfg(all(target_vendor = "oxide", target_os = "none"))]
     let cpio = include_bytes!(env!("PHBL_PHASE1_COMPRESSED_CPIO_ARCHIVE_PATH"));
-    #[cfg(not(target_arch = "x86_64-oxide-none-elf"))]
+    #[cfg(not(all(target_vendor = "oxide", target_os = "none")))]
     let cpio = [0u8; 1];
 
     let dst = phbl::ramdisk_region_init_mut();
