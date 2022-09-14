@@ -1110,7 +1110,7 @@ impl LoaderPageTable {
     /// first convert the ranges to closed, inclusive ranges.
     fn overlaps(rs: &[Range<mem::V4KA>], a: &Range<mem::V4KA>) -> bool {
         let aa = a.start.addr()..=(a.end.addr().wrapping_sub(1));
-        rs.into_iter().any(|range| {
+        rs.iter().any(|range| {
             let rr = range.start.addr()..=(range.end.addr().wrapping_sub(1));
             rr.contains(aa.start()) || aa.contains(rr.start())
         })
