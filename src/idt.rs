@@ -1,21 +1,11 @@
 // Derived form the rxv64 operating system.
 
 use crate::println;
+use bit_field::BitField;
+use bitstruct::bitstruct;
 use core::arch::asm;
 use core::ptr;
 use seq_macro::seq;
-
-/// An interrupt gate descriptor.
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct GateDesc([u64; 2]);
-
-impl GateDesc {
-    /// Returns an empty interrupt gate descriptor.
-    const fn empty() -> GateDesc {
-        GateDesc([0, 0])
-    }
-}
 
 /// Returns the selector for the 64-bit code segment in the GDT.
 fn code64() -> u16 {
@@ -25,25 +15,48 @@ fn code64() -> u16 {
     unsafe { GDT_CODE64.as_ptr() as u16 }
 }
 
-/// Creates an interrupt gate descriptor that dispatches to the
-/// given thunk.
-fn intr64(thunk: unsafe extern "C" fn() -> !) -> GateDesc {
-    const SEGMENT_PRESENT: u64 = 1 << (15 + 32);
-    const TYPE_INTR_GATE: u64 = 0b1110 << (8 + 32);
-    const DPL_KERN: u64 = 0b00 << (13 + 32);
-    const RSP0: u8 = 0;
+bitstruct! {
+    /// An interrupt gate descriptor.
+    #[derive(Clone, Copy, Default)]
+    pub struct GateDesc(u128) {
+        pub offset0: u16 = 0..16;
+        pub segment_selector: u16 = 16..32;
+        pub stack_table_index: u8 = 32..35;
+        mbz0: bool = 35;
+        mbz1: bool = 36;
+        mbz2: u8 = 37..40;
+        pub fixed_type: u8 = 40..44;
+        mbz3: bool = 44;
+        pub privilege_level: u8 = 45..47;
+        pub present: bool = 47;
+        pub offset16: u16 = 48..64;
+        pub offset32: u32 = 64..96;
+        reserved: u32 = 96..128;
+    }
+}
 
-    // The seemingly superfluous cast to usize and then
-    // to u64 is to silence a clippy warning.
-    let offset = thunk as usize as u64;
-    let lower0_offset = offset & 0x0000_FFFF;
-    let lower0 = (u64::from(code64()) << 16) | lower0_offset;
-    let lower1_offset = (offset & 0xFFFF_0000) << 32;
-    let lower1 = (u64::from(RSP0) << 32) | lower1_offset;
-    let segment_bits = SEGMENT_PRESENT | TYPE_INTR_GATE | DPL_KERN;
-    let lower = lower1 | lower0 | segment_bits;
-    let upper = offset >> 32;
-    GateDesc([lower, upper])
+impl GateDesc {
+    /// Returns an empty interrupt gate descriptor.
+    pub const fn empty() -> GateDesc {
+        const TYPE_INTERRUPT_GATE: u8 = 0b1110;
+        GateDesc(0).with_fixed_type(TYPE_INTERRUPT_GATE)
+    }
+
+    /// Returns a new interrupt gate descriptor that dispatches
+    /// to the given thunk.
+    pub fn new(thunk: unsafe extern "C" fn() -> !) -> GateDesc {
+        const DPL_KERN: u8 = 0b00;
+        const RSP0: u8 = 0;
+        let va = thunk as usize;
+        GateDesc::empty()
+            .with_offset0(va.get_bits(0..16) as u16)
+            .with_offset16(va.get_bits(16..32) as u16)
+            .with_offset32(va.get_bits(32..64) as u32)
+            .with_stack_table_index(RSP0)
+            .with_segment_selector(code64())
+            .with_present(true)
+            .with_privilege_level(DPL_KERN)
+    }
 }
 
 /// Loads the given IDT into the CPU.  Creates an IDT descriptor
@@ -241,7 +254,7 @@ impl Idt {
     fn init(&mut self) {
         self.entries = seq!(N in 0..=255 {
             [#(
-                intr64(vector~N),
+                GateDesc::new(vector~N),
             )*]
         });
     }
