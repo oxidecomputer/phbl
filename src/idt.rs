@@ -1,19 +1,57 @@
 // Derived form the rxv64 operating system.
 
+use modular_bitfield::prelude::*;
 use crate::println;
 use core::arch::asm;
 use core::ptr;
 use seq_macro::seq;
 
-/// An interrupt gate descriptor.
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct GateDesc([u64; 2]);
+#[derive(BitfieldSpecifier, Copy, Clone)]
+#[bits = 4]
+pub enum GateType {
+    IntrGate = 0b1110,
+    TrapGate = 0b1111,
+}
+
+#[bitfield(bits = 128)]
+#[repr(u128)] // alignment?
+#[derive(Copy, Clone)]
+pub struct GateDesc {
+    pub offset_lo: B16,
+    pub segment_selector: u16,
+    /// 0 for none
+    pub interrupt_stack_table_offset: B3,
+    #[skip]
+    reserved_0: B5,
+    #[bits = 4]
+    pub gate_type: GateType,
+    #[skip]
+    _zero: B1, // always 0
+    /// CPU Privilege Levels which are allowed to access this interrupt
+    /// via the INT instruction.
+    /// Hardware interrupts ignore this.
+    pub dpl: B2,
+    pub present: bool,
+
+    pub offset_hi: B48,
+    #[skip]
+    reserved_2: u32,
+}
 
 impl GateDesc {
-    /// Returns an empty interrupt gate descriptor.
-    const fn empty() -> GateDesc {
-        GateDesc([0, 0])
+    pub const fn builder() -> Self {
+        Self::new()
+    }
+    pub const fn build(&self) -> Self {
+        *self
+    }
+    pub fn with_offset(&mut self, offset: usize) -> Self {
+        self
+            .with_offset_lo((offset & 0xFFFF) as u16)
+            .with_offset_hi((offset >> 16) as u64)
+    }
+    pub const fn empty() -> Self {
+        Self::builder().build()
     }
 }
 
@@ -28,22 +66,14 @@ fn code64() -> u16 {
 /// Creates an interrupt gate descriptor that dispatches to the
 /// given thunk.
 fn intr64(thunk: unsafe extern "C" fn() -> !) -> GateDesc {
-    const SEGMENT_PRESENT: u64 = 1 << (15 + 32);
-    const TYPE_INTR_GATE: u64 = 0b1110 << (8 + 32);
-    const DPL_KERN: u64 = 0b00 << (13 + 32);
-    const RSP0: u8 = 0;
-
-    // The seemingly superfluous cast to usize and then
-    // to u64 is to silence a clippy warning.
-    let offset = thunk as usize as u64;
-    let lower0_offset = offset & 0x0000_FFFF;
-    let lower0 = (u64::from(code64()) << 16) | lower0_offset;
-    let lower1_offset = (offset & 0xFFFF_0000) << 32;
-    let lower1 = (u64::from(RSP0) << 32) | lower1_offset;
-    let segment_bits = SEGMENT_PRESENT | TYPE_INTR_GATE | DPL_KERN;
-    let lower = lower1 | lower0 | segment_bits;
-    let upper = offset >> 32;
-    GateDesc([lower, upper])
+    GateDesc::builder()
+        .with_present(true)
+        .with_gate_type(GateType::IntrGate)
+        .with_dpl(0b00)
+        .with_segment_selector(code64())
+        .with_offset(thunk as usize)
+        .with_interrupt_stack_table_offset(0)
+        .build()
 }
 
 /// Loads the given IDT into the CPU.  Creates an IDT descriptor
