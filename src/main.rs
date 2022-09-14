@@ -33,7 +33,8 @@ pub(crate) extern "C" fn entry(config: &mut phbl::Config) {
 
 /// Expands the compressed cpio archive image (basically a
 /// ramdisk) into a dedicated RAM region.  Note that the ramdisk
-/// is compiled into the loader image.
+/// is compiled into the loader image.  Returns a slice around
+/// the ramdisk contents.
 fn expand_ramdisk() -> &'static [u8] {
     use miniz_oxide::inflate::core::decompress;
     use miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER;
@@ -56,8 +57,7 @@ fn expand_ramdisk() -> &'static [u8] {
     let (s, _, o) = decompress(&mut r, &cpio[..], dst, 0, flags);
     assert!(s == TINFLStatus::Done);
     println!("Done.");
-    let ramdisk = &dst[..o];
-    ramdisk
+    &dst[..o]
 }
 
 fn find_kernel(cpio: &[u8]) -> &[u8] {
