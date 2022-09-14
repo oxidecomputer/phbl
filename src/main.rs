@@ -49,8 +49,8 @@ fn expand_ramdisk() -> &'static [u8] {
     let mut r = DecompressorOxide::new();
     let flags = TINFL_FLAG_PARSE_ZLIB_HEADER;
     print!(
-        "Decompressing cpio archive to {:#x?}..{:#x}...",
-        dst.as_ptr(),
+        "Decompressing cpio archive to {:#x}..{:#x}...",
+        dst.as_ptr() as usize,
         dst.len() + dst.as_ptr() as usize,
     );
     let (s, _, o) = decompress(&mut r, &cpio[..], dst, 0, flags);
