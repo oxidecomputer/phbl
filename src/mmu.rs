@@ -102,14 +102,13 @@
 
 extern crate alloc;
 
-use crate::allocator::BumpAlloc;
 use crate::mem;
-use alloc::alloc::{AllocError, Allocator, Layout};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use bitstruct::bitstruct;
 use core::ops::Range;
-use core::ptr;
+
+const NULL: *const () = core::ptr::null();
 
 /// We start with basic page and frame types.
 
@@ -232,7 +231,7 @@ enum Mapping1 {
 impl Mapping for Mapping1 {
     fn virt_addr(&self) -> *const () {
         match self {
-            Mapping1::Map4K(page, _, _) => page.addr() as *const (),
+            Mapping1::Map4K(page, _, _) => NULL.with_addr(page.addr()),
         }
     }
 }
@@ -246,7 +245,7 @@ enum Mapping2 {
 impl Mapping for Mapping2 {
     fn virt_addr(&self) -> *const () {
         match self {
-            Mapping2::Map2M(page, _, _) => page.addr() as *const (),
+            Mapping2::Map2M(page, _, _) => NULL.with_addr(page.addr()),
             Mapping2::Next(mapping1) => mapping1.virt_addr(),
         }
     }
@@ -261,7 +260,7 @@ enum Mapping3 {
 impl Mapping for Mapping3 {
     fn virt_addr(&self) -> *const () {
         match self {
-            Mapping3::Map1G(page, _, _) => page.addr() as *const (),
+            Mapping3::Map1G(page, _, _) => NULL.with_addr(page.addr()),
             Mapping3::Next(mapping2) => mapping2.virt_addr(),
         }
     }
@@ -409,7 +408,9 @@ impl PTE {
     /// Creates a new PTE for a table at any level in the radix
     /// tree.
     fn new_for_table<T: Table>(table: &T) -> PTE {
-        let pa = table as *const _ as usize as u64;
+        let ptr: *const T = table;
+        // Note that tables are identity mapped.
+        let pa = ptr.addr() as u64;
         PTE::from_phys_addr(pa)
             .with_p(true)
             .with_w(true)
@@ -430,7 +431,8 @@ impl PTE {
     /// Tables are taken from the identity mapped region of the
     /// address space.
     unsafe fn virt_addr(self) -> *const () {
-        self.phys_addr() as usize as *const ()
+        const NIL: *const () = core::ptr::null();
+        NIL.with_addr(self.phys_addr() as usize)
     }
 }
 
@@ -498,7 +500,7 @@ trait Table: Sized {
 
     /// Returns an entry in the current table for the given
     /// virtual address.
-    fn entry(&self, va: *const ()) -> Option<Self::EntryType>;
+    fn entry(&mut self, va: *const ()) -> Option<Self::EntryType>;
 
     /// Sets the entry corresponding to the given virtual
     /// address.
@@ -528,8 +530,7 @@ trait Table: Sized {
     /// Computes the table entry index for the given virtual
     /// address in the current table.
     fn index(va: *const ()) -> usize {
-        let va = va as usize;
-        (va >> Self::INDEX_SHIFT) & 0x1FF
+        (va.addr() >> Self::INDEX_SHIFT) & 0x1FF
     }
 }
 
@@ -561,15 +562,28 @@ enum PML4E {
     Next(&'static mut PML3),
 }
 
+impl InnerTable for PML4 {
+    type NextTableType = PML3;
+
+    fn next_mut(&mut self, va: *const ()) -> Option<&'static mut PML3> {
+        let entry = self.entries[Self::index(va)];
+        entry.p().then(|| {
+            let p = unsafe { entry.virt_addr() };
+            assert!(
+                !p.is_null() && p.is_aligned_to(core::mem::align_of::<PML3>())
+            );
+            unsafe { &mut *TableAlloc::try_with_addr(p.addr()).unwrap() }
+        })
+    }
+}
+
 impl Table for PML4 {
     type EntryType = PML4E;
     type MappingType = Mapping4;
     const INDEX_SHIFT: usize = 39;
 
-    fn entry(&self, va: *const ()) -> Option<Self::EntryType> {
-        let entry = self.entries[Self::index(va)];
-        let next = unsafe { &mut *(entry.virt_addr() as *mut _) };
-        entry.p().then_some(PML4E::Next(next))
+    fn entry(&mut self, va: *const ()) -> Option<Self::EntryType> {
+        self.next_mut(va).map(PML4E::Next)
     }
 
     unsafe fn set_entry(&mut self, va: *const (), entry: Option<PML4E>) {
@@ -595,15 +609,6 @@ impl Table for PML4 {
     }
 }
 
-impl InnerTable for PML4 {
-    type NextTableType = PML3;
-
-    fn next_mut(&mut self, va: *const ()) -> Option<&'static mut PML3> {
-        let entry = self.entries[Self::index(va)];
-        entry.p().then_some(unsafe { &mut *(entry.virt_addr() as *mut _) })
-    }
-}
-
 /// The PML3 is the second highest level in the paging radix
 /// tree.  It can either map 1GiB "huge" pages.
 #[repr(C, align(4096))]
@@ -618,19 +623,31 @@ enum PML3E {
     Page(PFN1G, mem::Attrs),
 }
 
+impl InnerTable for PML3 {
+    type NextTableType = PML2;
+
+    fn next_mut(&mut self, va: *const ()) -> Option<&'static mut PML2> {
+        let entry = self.entries[Self::index(va)];
+        (entry.p() && !entry.h()).then(|| {
+            let p = unsafe { entry.virt_addr() };
+            assert!(
+                !p.is_null() && p.is_aligned_to(core::mem::align_of::<PML2>())
+            );
+            unsafe { &mut *TableAlloc::try_with_addr(p.addr()).unwrap() }
+        })
+    }
+}
+
 impl Table for PML3 {
     type EntryType = PML3E;
     type MappingType = Mapping3;
     const INDEX_SHIFT: usize = 30;
 
-    fn entry(&self, va: *const ()) -> Option<Self::EntryType> {
+    fn entry(&mut self, va: *const ()) -> Option<Self::EntryType> {
         let entry = self.entries[Self::index(va)];
         match (entry.p(), entry.h()) {
             (false, _) => None,
-            (_, false) => {
-                let next = unsafe { &mut *(entry.virt_addr() as *mut _) };
-                Some(PML3E::Next(next))
-            }
+            (_, false) => self.next_mut(va).map(PML3E::Next),
             (_, true) => {
                 Some(PML3E::Page(PFN1G::new(entry.phys_addr()), entry.attrs()))
             }
@@ -667,16 +684,6 @@ impl Table for PML3 {
     }
 }
 
-impl InnerTable for PML3 {
-    type NextTableType = PML2;
-
-    fn next_mut(&mut self, va: *const ()) -> Option<&'static mut PML2> {
-        let entry = self.entries[Self::index(va)];
-        (entry.p() && !entry.h())
-            .then_some(unsafe { &mut *(entry.virt_addr() as *mut _) })
-    }
-}
-
 /// The PML2 is the third-highest type of table in the paging
 /// tree.
 #[repr(C, align(4096))]
@@ -691,19 +698,31 @@ enum PML2E {
     Page(PFN2M, mem::Attrs),
 }
 
+impl InnerTable for PML2 {
+    type NextTableType = PML1;
+
+    fn next_mut(&mut self, va: *const ()) -> Option<&'static mut PML1> {
+        let entry = self.entries[Self::index(va)];
+        (entry.p() && !entry.h()).then(|| {
+            let p = unsafe { entry.virt_addr() };
+            assert!(
+                !p.is_null() && p.is_aligned_to(core::mem::align_of::<PML1>())
+            );
+            unsafe { &mut *TableAlloc::try_with_addr(p.addr()).unwrap() }
+        })
+    }
+}
+
 impl Table for PML2 {
     type EntryType = PML2E;
     type MappingType = Mapping2;
     const INDEX_SHIFT: usize = 21;
 
-    fn entry(&self, va: *const ()) -> Option<Self::EntryType> {
+    fn entry(&mut self, va: *const ()) -> Option<Self::EntryType> {
         let entry = self.entries[Self::index(va)];
         match (entry.p(), entry.h()) {
             (false, _) => None,
-            (_, false) => {
-                let next = unsafe { &mut *(entry.virt_addr() as *mut _) };
-                Some(PML2E::Next(next))
-            }
+            (_, false) => self.next_mut(va).map(PML2E::Next),
             (_, true) => {
                 Some(PML2E::Page(PFN2M::new(entry.phys_addr()), entry.attrs()))
             }
@@ -740,16 +759,6 @@ impl Table for PML2 {
     }
 }
 
-impl InnerTable for PML2 {
-    type NextTableType = PML1;
-
-    fn next_mut(&mut self, va: *const ()) -> Option<&'static mut PML1> {
-        let entry = self.entries[Self::index(va)];
-        (entry.p() && !entry.h())
-            .then_some(unsafe { &mut *(entry.virt_addr() as *mut _) })
-    }
-}
-
 /// The PML1 represents a terminal leaf note in the paging radix
 /// tree.
 #[repr(C, align(4096))]
@@ -767,12 +776,11 @@ impl Table for PML1 {
     type MappingType = Mapping1;
     const INDEX_SHIFT: usize = 12;
 
-    fn entry(&self, va: *const ()) -> Option<Self::EntryType> {
+    fn entry(&mut self, va: *const ()) -> Option<Self::EntryType> {
         let entry = self.entries[Self::index(va)];
-        entry.p().then_some(PML1E::Page(
-            PFN4K::new(entry.phys_addr()),
-            entry.attrs(),
-        ))
+        entry
+            .p()
+            .then(|| PML1E::Page(PFN4K::new(entry.phys_addr()), entry.attrs()))
     }
 
     unsafe fn set_entry(&mut self, va: *const (), entry: Option<PML1E>) {
@@ -807,6 +815,7 @@ impl PageTable {
         Box::leak(unsafe { table.assume_init() })
     }
 
+    /// Loads the page table into the MMU.
     pub(crate) unsafe fn activate(&'static mut self) -> &'static mut PageTable {
         let pa = self.phys_addr();
         unsafe {
@@ -815,8 +824,12 @@ impl PageTable {
         self
     }
 
+    /// Returns the physical address of the root of the page
+    /// table radix tree.
     pub(crate) fn phys_addr(&self) -> u64 {
-        &self.pml4 as *const _ as usize as u64
+        let ptr: *const PML4 = &self.pml4;
+        // Note that the PML4 is identity mapped.
+        ptr.addr() as u64
     }
 
     /// Identity maps an address space.
@@ -944,7 +957,7 @@ mod tests {
         // Examine the PML3 entries.  There should be a single
         // entry pointing to a PML2 for the loader, and two huge
         // pages for MMIO space.
-        let pml3 = pml4.next_mut(0x8000_0000 as *const ()).unwrap();
+        let pml3 = pml4.next_mut(NULL.with_addr(0x8000_0000)).unwrap();
         let n = pml3.entries.iter().filter(|&e| e.p()).count();
         assert_eq!(n, 3);
         let l0g = pml3.entries[0];
@@ -976,7 +989,7 @@ mod tests {
 
         // Check the PML2 entries.  The PML2 maps a gigabyte of
         // address space from 0 to 0x4000_0000.
-        let pml2 = pml3.next_mut(0x1000_0000 as *const ()).unwrap();
+        let pml2 = pml3.next_mut(NULL.with_addr(0x1000_0000)).unwrap();
         let n = pml2.entries.iter().filter(|&e| e.p()).count();
         assert_eq!(n, 512 - 512 / 4);
         // The lower quarter of the PML2 should be empty.
@@ -1012,7 +1025,7 @@ mod tests {
         // Check the 4KiB PML1 entries.  There should be one
         // text page, two RO data pages, and a bunch of RW
         // data pages.
-        let pml1 = pml2.next_mut(0x1000_0000 as *const ()).unwrap();
+        let pml1 = pml2.next_mut(NULL.with_addr(0x1000_0000)).unwrap();
         // Text.
         assert!(pml1.entries[0].p());
         assert!(!pml1.entries[0].w());
@@ -1161,41 +1174,74 @@ mod loader_page_table_tests {
     }
 }
 
-/// An allocator specialized for MMU page allocations.
-///
-/// # Safety
-/// This is visibility restricted to this module, and
-/// the only allocations we take from it are PAGE_SIZE
-/// size and aligned.
-struct TableAlloc;
+mod arena {
+    extern crate alloc;
 
-unsafe impl Allocator for TableAlloc {
-    fn allocate(
-        &self,
-        layout: Layout,
-    ) -> Result<ptr::NonNull<[u8]>, AllocError> {
-        const PAGE_SIZE: usize = 4096;
-        const PAGE_ARENA_SIZE: usize = 128 * PAGE_SIZE;
-        // This is trivially true, but keep the assert as
-        // documentation of the minimum arena size invariant.
-        // See RFD215 for details.
-        #[allow(clippy::assertions_on_constants)]
-        {
-            assert!(PAGE_ARENA_SIZE > 16 * PAGE_SIZE);
-        }
-        #[repr(C, align(4096))]
-        struct PageArena([u8; PAGE_ARENA_SIZE]);
-        static mut PAGES: PageArena = PageArena([0; PAGE_ARENA_SIZE]);
-        static mut PAGE_ALLOCATOR: BumpAlloc<PAGE_ARENA_SIZE> =
-            BumpAlloc::new(unsafe { PAGES.0 });
+    use super::Table;
+    use crate::allocator::BumpAlloc;
+    use alloc::alloc::{AllocError, Allocator, Layout};
+    use core::ptr;
+    use static_assertions::const_assert;
 
-        let align = layout.align();
-        let size = layout.size();
-        assert_eq!(align, PAGE_SIZE);
-        assert_eq!(size, PAGE_SIZE);
-        let a = unsafe { PAGE_ALLOCATOR.alloc_bytes(align, size) };
-        let p = a.ok_or(AllocError)?;
-        Ok(p.into())
+    const PAGE_SIZE: usize = 4096;
+    const PAGE_ARENA_SIZE: usize = 128 * PAGE_SIZE;
+    // This is trivially true, but keep the assert as
+    // documentation of the minimum arena size invariant.
+    // See RFD215 for details.
+    const_assert!(PAGE_ARENA_SIZE > 16 * PAGE_SIZE);
+
+    /// An allocator specialized for MMU page allocations.
+    ///
+    /// # Safety
+    /// This is visibility restricted to this module, and
+    /// the only allocations we take from it are PAGE_SIZE
+    /// size and aligned.
+    pub(super) struct TableAlloc;
+
+    #[derive(Clone, Copy, Debug)]
+    pub(super) enum Error {
+        BadPointer,
     }
-    unsafe fn deallocate(&self, _ptr: ptr::NonNull<u8>, _layout: Layout) {}
+
+    impl TableAlloc {
+        /// Try and convert an integer to a pointer.
+        pub(super) fn try_with_addr<T: Table>(
+            addr: usize,
+        ) -> Result<*mut T, Error> {
+            let base = unsafe { PAGE_ALLOCATOR.base() };
+            let range = unsafe { PAGE_ALLOCATOR.addr_range() };
+            if !range.contains(&addr) {
+                return Err(Error::BadPointer);
+            }
+            let ptr = base.with_addr(addr);
+            if !ptr.is_aligned_to(core::mem::align_of::<T>()) {
+                return Err(Error::BadPointer);
+            }
+            Ok(ptr as *mut T)
+        }
+    }
+
+    #[repr(C, align(4096))]
+    struct PageArena([u8; PAGE_ARENA_SIZE]);
+    static mut PAGES: PageArena = PageArena([0; PAGE_ARENA_SIZE]);
+    static mut PAGE_ALLOCATOR: BumpAlloc<{ PAGE_ARENA_SIZE }> =
+        BumpAlloc::new(unsafe { PAGES.0 });
+
+    unsafe impl Allocator for TableAlloc {
+        fn allocate(
+            &self,
+            layout: Layout,
+        ) -> Result<ptr::NonNull<[u8]>, AllocError> {
+            let align = layout.align();
+            let size = layout.size();
+            assert_eq!(align, PAGE_SIZE);
+            assert_eq!(size, PAGE_SIZE);
+            let a = unsafe { PAGE_ALLOCATOR.alloc_bytes(align, size) };
+            let p = a.ok_or(AllocError)?;
+            Ok(p.into())
+        }
+        unsafe fn deallocate(&self, _ptr: ptr::NonNull<u8>, _layout: Layout) {}
+    }
 }
+
+use arena::TableAlloc;

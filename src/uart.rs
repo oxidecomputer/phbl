@@ -438,7 +438,8 @@ impl Device {
     }
 
     fn reset<'a>(self) -> &'a mut ConfigMmio {
-        let uart = unsafe { &mut *(self.addr() as *mut ConfigMmio) };
+        const NULL: *mut ConfigMmio = core::ptr::null_mut();
+        let uart = unsafe { &mut *NULL.with_addr(self.addr()) };
         unsafe {
             ptr::write_volatile(
                 &mut uart.srr,
@@ -466,12 +467,14 @@ impl Uart {
     }
 
     fn write_mmio_mut(&mut self) -> &mut MmioWrite {
-        let regs = self.0.addr() as *mut MmioWrite;
+        const NULL: *mut MmioWrite = core::ptr::null_mut();
+        let regs = NULL.with_addr(self.0.addr());
         unsafe { &mut *regs }
     }
 
     fn read_mmio_mut(&mut self) -> &mut MmioRead {
-        let regs = self.0.addr() as *mut MmioRead;
+        const NULL: *mut MmioRead = core::ptr::null_mut();
+        let regs = NULL.with_addr(self.0.addr());
         unsafe { &mut *regs }
     }
 

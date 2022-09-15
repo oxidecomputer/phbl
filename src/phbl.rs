@@ -117,40 +117,40 @@ fn cpio_addr() -> mem::V4KA {
 
 /// Returns the address of the start of the loader text segment.
 fn text_addr() -> mem::V4KA {
-    mem::V4KA::new(unsafe { __sloader.as_ptr() as usize })
+    mem::V4KA::new(unsafe { __sloader.as_ptr().addr() })
 }
 
 /// Returns the address of the start of the loader read-only
 /// data segment.
 fn rodata_addr() -> mem::V4KA {
-    mem::V4KA::new(unsafe { etext.as_ptr() as usize })
+    mem::V4KA::new(unsafe { etext.as_ptr().addr() })
 }
 
 /// Returns the address of the start of the loader read/write
 /// data segment.
 fn data_addr() -> mem::V4KA {
-    mem::V4KA::new(unsafe { erodata.as_ptr() as usize })
+    mem::V4KA::new(unsafe { erodata.as_ptr().addr() })
 }
 
 /// Returns the address of the start of the loader BSS segment.
 fn bss_addr() -> mem::V4KA {
-    mem::V4KA::new(unsafe { edata.as_ptr() as usize })
+    mem::V4KA::new(unsafe { edata.as_ptr().addr() })
 }
 
 /// Returns the address of the end of the loader BSS.
 fn end_addr() -> mem::V4KA {
-    mem::V4KA::new(unsafe { end.as_ptr() as usize })
+    mem::V4KA::new(unsafe { end.as_ptr().addr() })
 }
 
 /// Returns the address of end of the loader memory image,
 /// including the boot block and reset vector.
 fn eaddr() -> mem::V4KA {
-    mem::V4KA::new(unsafe { __eloader.as_ptr() as usize })
+    mem::V4KA::new(unsafe { __eloader.as_ptr().addr() })
 }
 
 /// Returns the address of the boot block.
 fn bootblock_addr() -> mem::V4KA {
-    mem::V4KA::new(unsafe { bootblock.as_ptr() as usize })
+    mem::V4KA::new(unsafe { bootblock.as_ptr().addr() })
 }
 
 /// Returns the address of the start of the MMIO region
@@ -172,8 +172,9 @@ pub(crate) fn ramdisk_region_init_mut() -> &'static mut [u8] {
     let text = text_addr().addr();
     const PHBL_MIN: usize = 2 * mem::GIB - 256 * mem::MIB;
     assert!(PHBL_MIN < cpio && cpio < text);
+    const PHBL_BASE: *mut u8 = core::ptr::invalid_mut(PHBL_MIN);
     let len = text - cpio;
-    let cpio = cpio as *mut u8;
+    let cpio = PHBL_BASE.with_addr(cpio);
     unsafe {
         core::ptr::write_bytes(cpio, 0, len);
         core::slice::from_raw_parts_mut(cpio, len)

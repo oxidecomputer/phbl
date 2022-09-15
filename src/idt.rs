@@ -288,8 +288,9 @@ unsafe fn backtrace(mut rbp: u64) {
         static stack: [u8; 0];
         static STACK_SIZE: [u8; 0]; // Really the size, but an absolute symbol
     }
-    let sstack = unsafe { stack.as_ptr() as u64 };
-    let estack = sstack + unsafe { STACK_SIZE.as_ptr() as u64 };
+    let base = unsafe { stack.as_ptr() } as *const u64;
+    let sstack = base.addr() as u64;
+    let estack = sstack + unsafe { STACK_SIZE.as_ptr().addr() as u64 };
     println!("stack [{sstack:x}..{estack:x}) %rip trace:");
     while rbp != 0 {
         if rbp < sstack || estack < rbp + 16 || rbp & 0b1111 != 0 {
@@ -298,7 +299,7 @@ unsafe fn backtrace(mut rbp: u64) {
             );
             break;
         }
-        let p = rbp as *const u64;
+        let p = base.with_addr(rbp as usize);
         let next_rbp = unsafe { ptr::read(p) };
         if next_rbp != 0 && next_rbp < rbp + 16 {
             println!("stack is corrupt {next_rbp:#x} <= {rbp:#x}");
