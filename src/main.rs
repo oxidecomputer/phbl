@@ -18,6 +18,7 @@ type Result<T> = core::result::Result<T, &'static str>;
 /// The main entry point, called from assembler.
 #[no_mangle]
 pub(crate) extern "C" fn entry(config: &mut phbl::Config) {
+    println!();
     println!("Oxide Pico Host Boot Loader");
     println!("{config:#x?}");
     let ramdisk = expand_ramdisk();
