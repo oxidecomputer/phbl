@@ -125,7 +125,8 @@ fn load_segment(
             page_table
                 .map_region(region.clone(), mem::Attrs::new_data(), pa)
                 .expect("mapped region {region:#x?} read-write");
-            let p = start.addr() as *mut u8;
+            const NULL: *mut u8 = core::ptr::null_mut();
+            let p = NULL.with_addr(start.addr());
             let len = end.addr() - start.addr();
             core::ptr::write_bytes(p, 0, len);
             core::slice::from_raw_parts_mut(p, len)

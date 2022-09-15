@@ -1,6 +1,8 @@
 #![feature(allocator_api, alloc_error_handler, new_uninit)]
 #![feature(asm_const, asm_sym)]
 #![feature(naked_functions)]
+#![feature(pointer_is_aligned)]
+#![feature(strict_provenance)]
 #![cfg_attr(not(any(test, feature = "cargo-clippy")), no_std)]
 #![cfg_attr(not(test), no_main)]
 #![forbid(unsafe_op_in_unsafe_fn)]
@@ -27,7 +29,7 @@ pub(crate) extern "C" fn entry(config: &mut phbl::Config) {
         loader::load(&mut config.page_table, kernel).expect("loaded kernel");
     println!("jumping to kernel entry at {:#x?}", entry as *const fn());
     unsafe {
-        entry(ramdisk.as_ptr() as u64, ramdisk.len());
+        entry(ramdisk.as_ptr().addr() as u64, ramdisk.len());
     }
     panic!("main returning");
 }
@@ -52,8 +54,8 @@ fn expand_ramdisk() -> &'static [u8] {
     let flags = TINFL_FLAG_PARSE_ZLIB_HEADER;
     print!(
         "Decompressing cpio archive to {:#x}..{:#x}...",
-        dst.as_ptr() as usize,
-        dst.len() + dst.as_ptr() as usize,
+        dst.as_ptr().addr(),
+        dst.len() + dst.as_ptr().addr(),
     );
     let (s, _, o) = decompress(&mut r, &cpio[..], dst, 0, flags);
     assert!(s == TINFLStatus::Done);

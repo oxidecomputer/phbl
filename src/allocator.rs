@@ -9,6 +9,7 @@ extern crate alloc;
 
 use alloc::alloc::{AllocError, Allocator, GlobalAlloc, Layout};
 use core::cell::UnsafeCell;
+use core::ops::Range;
 use core::ptr;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
@@ -32,7 +33,7 @@ impl<const SIZE: usize> BumpAlloc<SIZE> {
         align: usize,
         size: usize,
     ) -> Option<&mut [u8]> {
-        let heap = self.heap.get() as *mut u8;
+        let heap = self.base();
         let mut pos = 0;
         self.offset
             .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |offset| {
@@ -48,6 +49,21 @@ impl<const SIZE: usize> BumpAlloc<SIZE> {
             .ok()?;
         let ptr = unsafe { heap.add(pos) };
         Some(unsafe { core::slice::from_raw_parts_mut(ptr, size) })
+    }
+
+    /// Returns a raw pointer to the heap.  Useful for
+    /// reconstructing provenance.
+    pub(crate) fn base(&self) -> *mut u8 {
+        self.heap.get() as *mut u8
+    }
+
+    /// Returns the range of addresses in the heap, for
+    /// validating that an integral value lies within
+    /// the heap.
+    pub(crate) fn addr_range(&self) -> Range<usize> {
+        let start = self.base().addr();
+        let end = start + SIZE;
+        start..end
     }
 }
 
@@ -87,7 +103,7 @@ mod bump_tests {
 
         let a = allocator.alloc_bytes(4, 4).unwrap().as_ptr();
         let b = allocator.alloc_bytes(4, 4).unwrap().as_ptr();
-        assert_eq!(a as usize + 4, b as usize);
+        assert_eq!(a.addr() + 4, b.addr());
     }
 }
 
