@@ -19,6 +19,13 @@ jobs:
       - name: Run phbl tests
         run: cargo xtask test
 
+  miri:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run phbl miri tests
+        run: cargo miri test
+
   format:
     runs-on: ubuntu-latest
     steps:
