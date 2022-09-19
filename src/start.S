@@ -9,6 +9,7 @@
 // Definitions for bits in %cr0.
 CR0_PE =		1 << 0
 CR0_ET =		1 << 4
+CR0_WP =		1 << 16
 CR0_PG =		1 << 31
 CR0_MB1 =		CR0_ET
 
@@ -169,11 +170,12 @@ start:
 	xorl	%edx, %edx
 	wrmsr
 
-	// Enable paging.  Since PAE is enabled in %cr4 and long
-	// mode is enabled in the EFER MSR, the MMU will use 4
+	// Enable paging and write-protect enforcement for the
+	// kernel.  Since PAE is enabled in %cr4 and long mode
+	// is enabled in the EFER MSR, the MMU will use 4
 	// level paging.
 	movl	%cr0, %eax
-	orl	$CR0_PG, %eax
+	orl	$(CR0_PG | CR0_WP), %eax
 	movl	%eax, %cr0
 
 	// Jump to 64-bit code.
