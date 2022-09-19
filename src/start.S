@@ -28,7 +28,7 @@ MTRR_WB =		0x06
 // Paging constants.
 PAGE_SIZE =		4096
 PG_R =			1 << 0
-PG_W =			1 << 2
+PG_W =			1 << 1
 PG_WT =			1 << 3
 PG_NC =			1 << 4
 PG_HUGE =		1 << 7
