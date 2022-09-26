@@ -17,14 +17,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Run phbl tests
-        run: cargo xtask test
+        run: cargo xtask test --locked
 
   miri:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Run phbl miri tests
-        run: cargo miri test
+        run: cargo --locked miri test
 
   format:
     runs-on: ubuntu-latest
