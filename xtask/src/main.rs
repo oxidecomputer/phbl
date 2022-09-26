@@ -66,13 +66,17 @@ impl BuildArgs {
 fn main() {
     let matches = parse_args();
     match matches.subcommand() {
-        Some(("build", m)) => build(BuildArgs::new(m)),
-        Some(("test", m)) => test(BuildProfile::new(m)),
-        Some(("disasm", m)) => {
-            disasm(BuildArgs::new(m), m.contains_id("source").then_some("-S"))
+        Some(("build", m)) => build(BuildArgs::new(m), m.contains_id("locked")),
+        Some(("test", m)) => {
+            test(BuildProfile::new(m), m.contains_id("locked"))
         }
+        Some(("disasm", m)) => disasm(
+            BuildArgs::new(m),
+            m.contains_id("locked"),
+            m.contains_id("source").then_some("-S"),
+        ),
         Some(("expand", _m)) => expand(),
-        Some(("clippy", _m)) => clippy(),
+        Some(("clippy", m)) => clippy(m.contains_id("locked")),
         Some(("clean", _m)) => clean(),
         _ => {
             println!("Unknown command");
@@ -89,6 +93,7 @@ fn parse_args() -> clap::ArgMatches {
         .about("xtask build tool for pico host boot loader")
         .subcommand(
             clap::Command::new("build").about("Builds phbl").args(&[
+                clap::arg!(--locked "Build locked to Cargo.lock"),
                 clap::arg!(--release "Build optimized version")
                     .conflicts_with("debug"),
                 clap::arg!(--debug "Build debug version (default)")
@@ -100,6 +105,7 @@ fn parse_args() -> clap::ArgMatches {
         )
         .subcommand(
             clap::Command::new("test").about("Run unit tests").args(&[
+                clap::arg!(--locked "Build or test locked to Cargo.lock"),
                 clap::arg!(--release "Test optimized version")
                     .conflicts_with("debug"),
                 clap::arg!(--debug "Test debug version (default)")
@@ -108,6 +114,7 @@ fn parse_args() -> clap::ArgMatches {
         )
         .subcommand(
             clap::Command::new("disasm").about("disassemble phbl").args(&[
+                clap::arg!(--locked "Build locked to Cargo.lock"),
                 clap::arg!(--release "Disassemble optimized version")
                     .conflicts_with("debug"),
                 clap::arg!(--debug "Disassemble debug version (default)")
@@ -120,19 +127,22 @@ fn parse_args() -> clap::ArgMatches {
         )
         .subcommand(clap::Command::new("expand").about("Expand macros"))
         .subcommand(
-            clap::Command::new("clippy").about("Run cargo clippy linter"),
+            clap::Command::new("clippy")
+                .about("Run cargo clippy linter")
+                .args(&[clap::arg!(--locked "Lint locked to Cargo.lock")]),
         )
         .subcommand(clap::Command::new("clean").about("cargo clean"))
         .get_matches()
 }
 
 /// Runs a cross-compiled build.
-fn build(args: BuildArgs) {
+fn build(args: BuildArgs, with_locked: bool) {
     std::env::set_var("PHBL_PHASE1_COMPRESSED_CPIO_ARCHIVE_PATH", args.cpioz);
     let build_type = args.profile.build_type().unwrap_or("");
+    let locked = with_locked.then_some("--locked").unwrap_or("");
     let target = target();
     let args = format!(
-        "build {build_type} \
+        "build {locked} {build_type} \
             -Z build-std=core,alloc \
             -Z build-std-features=compiler-builtins-mem \
             --target {target}.json"
@@ -141,18 +151,16 @@ fn build(args: BuildArgs) {
 }
 
 /// Runs tests.
-fn test(profile: BuildProfile) {
-    let c = if let Some(arg) = profile.build_type() {
-        cmd!(cargo(), "test", arg)
-    } else {
-        cmd!(cargo(), "test")
-    };
-    c.run().expect("test successful");
+fn test(profile: BuildProfile, with_locked: bool) {
+    let build_type = profile.build_type().unwrap_or("");
+    let locked = with_locked.then_some("--locked").unwrap_or("");
+    let args = format!("test {locked} {build_type}");
+    cmd(cargo(), args.split_whitespace()).run().expect("test successful");
 }
 
 /// Build and disassemble the phbl binary.
-fn disasm(build_args: BuildArgs, flags: Option<&str>) {
-    build(build_args.clone());
+fn disasm(build_args: BuildArgs, with_locked: bool, flags: Option<&str>) {
+    build(build_args.clone(), with_locked);
     let triple = target();
     let profile_dir = build_args.profile.dir().to_str().unwrap();
     let flags = flags.unwrap_or("");
@@ -170,8 +178,10 @@ fn expand() {
 }
 
 /// Runs the Clippy linter.
-fn clippy() {
-    cmd!(cargo(), "clippy").run().expect("clippy successful");
+fn clippy(with_locked: bool) {
+    let locked = with_locked.then_some("--locked").unwrap_or("");
+    let args = format!("clippy {locked}");
+    cmd(cargo(), args.split_whitespace()).run().expect("clippy successful");
 }
 
 /// Runs clean on the project.
