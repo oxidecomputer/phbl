@@ -83,7 +83,7 @@ repository and run:
 cargo run -- \
     -B amd-firmware/GN/1.0.0.1 \
     -B amd-firmware/GN/1.0.0.6 \
-    -c etc/milan-gimlet-b.efs.json5
+    -c etc/milan-gimlet-b.efs.json \
     -r ${PHBL_REPO_ROOT}/target/x86_64-oxide-none-elf/debug/phbl \
     -o milan-gimlet-b-phbl.img
 ```
