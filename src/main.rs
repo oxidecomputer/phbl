@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #![feature(allocator_api, alloc_error_handler, new_uninit)]
 #![feature(asm_const, asm_sym)]
 #![feature(naked_functions)]
