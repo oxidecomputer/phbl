@@ -31,6 +31,9 @@ static bootblock: usize = 65536 + 4096;
 static __eloader: usize = 65536 + 8192;
 /// Defined in assembly.
 #[no_mangle]
+static MMIO_BASE: usize = 65536 + 16384;
+/// Defined in assembly.
+#[no_mangle]
 static STACK_SIZE: u64 = 8 * 4096;
 /// Defined in assembly.
 #[no_mangle]
