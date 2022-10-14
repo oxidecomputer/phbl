@@ -43,6 +43,14 @@ cargo xtask build --cpioz=$CPIOZ
 This generates a "Debug" binary in the file
 `target/x86_64-oxide-none-elf/debug/phbl`.
 
+**Note**: Linking `phbl` requires using the GNU linker.
+By default, Oxide's build systems install GNU ld as `gld`, which is
+configured in `x86_64-oxide-none-elf.json`. If your OS installation
+calls it something else, set the [environment variable](
+https://doc.rust-lang.org/cargo/reference/environment-variables.html)
+`CARGO_TARGET_X86_64_OXIDE_NONE_ELF_LINKER` to use yours. On most GNU
+systems, that will be `CARGO_TARGET_X86_64_OXIDE_NONE_ELF_LINKER=ld`.
+
 ## Phbl development
 
 Modifying `phbl` follows the typical development patterns of
