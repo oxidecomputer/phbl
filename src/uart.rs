@@ -441,8 +441,8 @@ impl Device {
     }
 
     fn reset<'a>(self) -> &'a mut ConfigMmio {
-        const NULL: *mut ConfigMmio = core::ptr::null_mut();
-        let uart = unsafe { &mut *NULL.with_addr(self.addr()) };
+        let regs = core::ptr::from_exposed_addr_mut::<ConfigMmio>(self.addr());
+        let uart = unsafe { &mut *regs };
         unsafe {
             ptr::write_volatile(
                 &mut uart.srr,
@@ -470,8 +470,7 @@ impl Uart {
     }
 
     fn write_mmio_mut(&mut self) -> &mut MmioWrite {
-        const NULL: *mut MmioWrite = core::ptr::null_mut();
-        let regs = NULL.with_addr(self.0.addr());
+        let regs = core::ptr::from_exposed_addr_mut::<MmioWrite>(self.0.addr());
         unsafe { &mut *regs }
     }
 
@@ -480,8 +479,7 @@ impl Uart {
     // it is mutually exclusive with a write MMIO structure,
     // as the two share the same register space.
     fn read_mmio_mut(&mut self) -> &mut MmioRead {
-        const NULL: *mut MmioRead = core::ptr::null_mut();
-        let regs = NULL.with_addr(self.0.addr());
+        let regs = core::ptr::from_exposed_addr_mut::<MmioRead>(self.0.addr());
         unsafe { &mut *regs }
     }
 

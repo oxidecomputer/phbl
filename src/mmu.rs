@@ -58,8 +58,8 @@
 //!   radix tree.  The `Table` trait describes behaviors at a
 //!   particular level in the tree.  Concrete types exist for
 //!   tables at each tree level.
-//! * `TableInner` --- An interior node in the tree can either,
-//!   depending on its specific type, either map to a large page
+//! * `TableInner` --- An interior node in the tree can,
+//!   depending on its specific type, either map to a "big" page
 //!   or point to a next-level page table.  This trait describes
 //!   behaviors of table types that can point to other nodes.
 //! * `Mapping` and the `Mapping(1|2|3|4)` enumerations ---
@@ -112,7 +112,10 @@ use alloc::vec::Vec;
 use bitstruct::bitstruct;
 use core::ops::Range;
 
-const NULL: *const () = core::ptr::null();
+#[derive(Clone, Copy, Debug)]
+pub(super) enum Error {
+    BadPointer,
+}
 
 /// We start with basic page and frame types.
 
@@ -131,7 +134,6 @@ trait Frame {
 }
 
 /// An aligned 4KiB span of physical address space.
-/// XXX(cross): Provide an invariant enforcing implementation.
 #[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
 struct PFN4K(u64);
@@ -150,7 +152,6 @@ impl Frame for PFN4K {
 }
 
 /// An aligned 2MiB span of physical address space.
-/// XXX(cross): Provide an invariant enforcing implementation.
 #[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
 struct PFN2M(u64);
@@ -169,7 +170,6 @@ impl Frame for PFN2M {
 }
 
 /// An aligned 1GiB span of physical address space.
-/// XXX(cross): Provide an invariant enforcing implementation.
 #[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
 struct PFN1G(u64);
@@ -189,7 +189,6 @@ impl Frame for PFN1G {
 
 /// Represents a 4KiB page of virtual memory, aligned on a 4KiB
 /// boundary.
-/// XXX(cross): Provide an invariant enforcing implementation.
 #[derive(Clone)]
 struct Page4K(usize);
 impl Page4K {
@@ -201,7 +200,6 @@ impl Page4K {
 
 /// Represents a 2MiB page of virtual memory, aligned on a 2MiB
 /// boundary.
-/// XXX(cross): Provide an invariant enforcing implementation.
 struct Page2M(usize);
 impl Page2M {
     fn new(va: usize) -> Self {
@@ -212,7 +210,6 @@ impl Page2M {
 
 /// Represents a 1GiB page of virtual memory, aligned on a 1GiB
 /// boundary.
-/// XXX(cross): Provide an invariant enforcing implementation.
 struct Page1G(usize);
 impl Page1G {
     fn new(va: usize) -> Self {
@@ -235,7 +232,7 @@ enum Mapping1 {
 impl Mapping for Mapping1 {
     fn virt_addr(&self) -> *const () {
         match self {
-            Mapping1::Map4K(page, _, _) => NULL.with_addr(page.addr()),
+            Mapping1::Map4K(page, _, _) => core::ptr::invalid(page.addr()),
         }
     }
 }
@@ -249,7 +246,7 @@ enum Mapping2 {
 impl Mapping for Mapping2 {
     fn virt_addr(&self) -> *const () {
         match self {
-            Mapping2::Map2M(page, _, _) => NULL.with_addr(page.addr()),
+            Mapping2::Map2M(page, _, _) => core::ptr::invalid(page.addr()),
             Mapping2::Next(mapping1) => mapping1.virt_addr(),
         }
     }
@@ -264,7 +261,7 @@ enum Mapping3 {
 impl Mapping for Mapping3 {
     fn virt_addr(&self) -> *const () {
         match self {
-            Mapping3::Map1G(page, _, _) => NULL.with_addr(page.addr()),
+            Mapping3::Map1G(page, _, _) => core::ptr::invalid(page.addr()),
             Mapping3::Next(mapping2) => mapping2.virt_addr(),
         }
     }
@@ -435,8 +432,7 @@ impl PTE {
     /// Tables are taken from the identity mapped region of the
     /// address space.
     unsafe fn virt_addr(self) -> *const () {
-        const NIL: *const () = core::ptr::null();
-        NIL.with_addr(self.phys_addr() as usize)
+        core::ptr::invalid(self.phys_addr() as usize)
     }
 }
 
@@ -903,6 +899,25 @@ impl PageTable {
             self.pml4.map(P::mapping(page, frame, attrs));
         }
     }
+
+    /// XXX(cross): Make this actually walk the table to make sure
+    /// the VA is really mapped.
+    fn is_mapped(&self, va: usize) -> bool {
+        va != 0
+    }
+
+    /// Returns a raw pointer to a virtual address mapped by
+    /// this table.
+    pub(crate) fn try_with_addr<T>(&self, va: usize) -> Result<*mut T, Error> {
+        if !self.is_mapped(va) {
+            return Err(Error::BadPointer);
+        }
+        let ptr = core::ptr::from_exposed_addr_mut::<()>(va);
+        if !ptr.is_aligned_to(core::mem::align_of::<T>()) {
+            return Err(Error::BadPointer);
+        }
+        Ok(ptr as *mut T)
+    }
 }
 
 #[cfg(test)]
@@ -961,7 +976,7 @@ mod tests {
         // Examine the PML3 entries.  There should be a single
         // entry pointing to a PML2 for the loader, and two huge
         // pages for MMIO space.
-        let pml3 = pml4.next_mut(NULL.with_addr(0x8000_0000)).unwrap();
+        let pml3 = pml4.next_mut(core::ptr::invalid(0x8000_0000)).unwrap();
         let n = pml3.entries.iter().filter(|&e| e.p()).count();
         assert_eq!(n, 3);
         let l0g = pml3.entries[0];
@@ -993,7 +1008,7 @@ mod tests {
 
         // Check the PML2 entries.  The PML2 maps a gigabyte of
         // address space from 0 to 0x4000_0000.
-        let pml2 = pml3.next_mut(NULL.with_addr(0x1000_0000)).unwrap();
+        let pml2 = pml3.next_mut(core::ptr::invalid(0x1000_0000)).unwrap();
         let n = pml2.entries.iter().filter(|&e| e.p()).count();
         assert_eq!(n, 512 - 512 / 4);
         // The lower quarter of the PML2 should be empty.
@@ -1029,7 +1044,7 @@ mod tests {
         // Check the 4KiB PML1 entries.  There should be one
         // text page, two RO data pages, and a bunch of RW
         // data pages.
-        let pml1 = pml2.next_mut(NULL.with_addr(0x1000_0000)).unwrap();
+        let pml1 = pml2.next_mut(core::ptr::invalid(0x1000_0000)).unwrap();
         // Text.
         assert!(pml1.entries[0].p());
         assert!(!pml1.entries[0].w());
@@ -1133,6 +1148,12 @@ impl LoaderPageTable {
         })
     }
 
+    /// Returns a pointer from a virtual address mapped by this
+    /// table.
+    pub(crate) fn try_with_addr<T>(&self, va: usize) -> Result<*mut T, Error> {
+        self.page_table.try_with_addr(va)
+    }
+
     /// Returns the physical address of the page table root.
     pub(crate) fn phys_addr(&self) -> u64 {
         self.page_table.phys_addr()
@@ -1181,7 +1202,7 @@ mod loader_page_table_tests {
 mod arena {
     extern crate alloc;
 
-    use super::Table;
+    use super::{Error, Table};
     use crate::allocator::BumpAlloc;
     use alloc::alloc::{AllocError, Allocator, Layout};
     use core::ptr;
@@ -1201,11 +1222,6 @@ mod arena {
     /// the only allocations we take from it are PAGE_SIZE
     /// size and aligned.
     pub(super) struct TableAlloc;
-
-    #[derive(Clone, Copy, Debug)]
-    pub(super) enum Error {
-        BadPointer,
-    }
 
     impl TableAlloc {
         /// Try and convert an integer to a pointer.
