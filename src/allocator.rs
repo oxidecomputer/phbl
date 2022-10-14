@@ -1,13 +1,16 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
-
-// Copyright 2021  The Hypatia Authors
-// All rights reserved
 //
-// Use of this source code is governed by an MIT-style
-// license that can be found in the LICENSE file or at
-// https://opensource.org/licenses/MIT.
+// This file incorporates work covered by the following copyright and
+// permission notice:
+//
+//   Copyright 2021  The Hypatia Authors
+//   All rights reserved
+//
+//   Use of this source code is governed by an MIT-style
+//   license that can be found in the LICENSE file or at
+//   https://opensource.org/licenses/MIT.
 
 extern crate alloc;
 
