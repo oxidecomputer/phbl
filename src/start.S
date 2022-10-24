@@ -37,10 +37,8 @@ PG_X =			0 << 63
 PG_NX =			1 << 63
 
 // Segmentation constants for 16, 32 and 64 bit.
-// Note that illumos expects the 64-bit code segment selector to
-// be 0x28 on entry, not 0x8, so we set that here.
 GDT_NULL =		0 << 3
-GDT_CODE64 =		5 << 3	// 0x28, not 0x8.
+GDT_CODE64 =		1 << 3
 GDT_CODE32 =		2 << 3
 GDT_DATA32 =		3 << 3
 .globl GDT_CODE64
@@ -61,11 +59,6 @@ SEG32_BOUNDS =		(SEG32_BASE + SEG32_LIMIT)	// [0..4GiB)
 SEG32 =			(SEG32_DEFAULT + SEG32_GRANULARITY + SEG32_BOUNDS)
 
 SEG16_MASK =		0xFFFF
-
-// Debug-related data
-DEBUG_PORT =		0x80
-DEBUG_HELLO =		0x1DE
-DEBUG_HALTED =		0x1DE0DEAD
 
 // Stack configuration.
 STACK_SIZE =		8 * PAGE_SIZE
@@ -196,10 +189,6 @@ gdt:
 	.quad	(SEG_PRESENT + SEG_READ + SEG_CODE + SEG32 + SEG_MUSTBE1)
 	// 0x18: 32-bit data segment.
 	.quad	(SEG_PRESENT + SEG_READ + SEG_WRITE + SEG32 + SEG_MUSTBE1)
-	// 0x20: Empty segment.
-	.quad	0
-	// 0x28: Another 64-bit code segment.  Illumos expects this.
-	.quad	(SEG_PRESENT + SEG_READ + SEG_CODE + SEG_LONG + SEG_MUSTBE1)
 egdt:
 
 .skip 6
@@ -246,12 +235,9 @@ start64:
 .balign 64
 .globl dnr
 dnr:
-	movl	$DEBUG_HALTED, %eax
-	outl	%eax, $DEBUG_PORT
-
-1:	cli
+	cli
 	hlt
-	jmp	1b
+	jmp	dnr
 	ud2
 
 // The rodata section contains space for the early page tables.
