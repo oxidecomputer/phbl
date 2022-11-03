@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 #![feature(allocator_api, alloc_error_handler, new_uninit)]
-#![feature(asm_const, asm_sym)]
+#![feature(asm_const)]
 #![feature(naked_functions)]
 #![feature(pointer_is_aligned)]
 #![feature(strict_provenance)]

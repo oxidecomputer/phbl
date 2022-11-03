@@ -106,7 +106,7 @@ fn load_segment(
     section: &ProgramHeader,
     bytes: &[u8],
 ) -> Result<()> {
-    let pa = section.p_paddr as u64;
+    let pa = section.p_paddr;
     if pa % mem::P4KA::ALIGN != 0 {
         return Err("Program section is not physically 4KiB aligned");
     }
