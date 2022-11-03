@@ -860,7 +860,7 @@ impl PageTable {
                 && (pa as usize) % PFN1G::SIZE == 0
             {
                 unsafe {
-                    self.map(Page1G::new(start), PFN1G::new(pa as u64), attrs);
+                    self.map(Page1G::new(start), PFN1G::new(pa), attrs);
                 }
                 PFN1G::SIZE
             } else if end.wrapping_sub(start) >= PFN2M::SIZE
@@ -868,7 +868,7 @@ impl PageTable {
                 && (pa as usize) % PFN2M::SIZE == 0
             {
                 unsafe {
-                    self.map(Page2M::new(start), PFN2M::new(pa as u64), attrs);
+                    self.map(Page2M::new(start), PFN2M::new(pa), attrs);
                 }
                 PFN2M::SIZE
             } else if end.wrapping_sub(start) >= PFN4K::SIZE
@@ -876,7 +876,7 @@ impl PageTable {
                 && (pa as usize) % PFN4K::SIZE == 0
             {
                 unsafe {
-                    self.map(Page4K::new(start), PFN4K::new(pa as u64), attrs);
+                    self.map(Page4K::new(start), PFN4K::new(pa), attrs);
                 }
                 PFN4K::SIZE
             } else {
