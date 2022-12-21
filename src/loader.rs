@@ -121,7 +121,7 @@ fn load_segment(
         return Err("Program section ends before start or is empty");
     }
     let start = mem::V4KA::new(vm.start);
-    let end = mem::V4KA::new(round_up_2m(vm.end));
+    let end = mem::V4KA::new(round_up_4k(vm.end));
     let region = start..end;
     let pa = mem::P4KA::new(pa);
     {
@@ -152,9 +152,9 @@ fn load_segment(
     Ok(())
 }
 
-/// Aligns the given address up to the next higher 2MiB
-/// boundary.
-fn round_up_2m(va: usize) -> usize {
-    const MASK: usize = (1 << 21) - 1;
+/// Aligns the given address up to the next higher 4KiB
+/// boundary, possibly wrapping around to 0.
+fn round_up_4k(va: usize) -> usize {
+    const MASK: usize = 0b1111_1111_1111;
     va.wrapping_add(MASK) & !MASK
 }
