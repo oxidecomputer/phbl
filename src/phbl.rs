@@ -84,7 +84,7 @@ pub(crate) unsafe extern "C" fn init(bist: u32) -> &'static mut Config {
     uart::init();
     idt::init();
     if bist != 0 {
-        panic!("bist failed: {:#x}", bist);
+        panic!("bist failed: {bist:#x}");
     }
     let cons = Uart::uart0();
     let page_table = remap(mem::V4KA::new(cons.addr()));
