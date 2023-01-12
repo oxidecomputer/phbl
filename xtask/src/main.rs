@@ -5,150 +5,135 @@
 //!
 //! Build driver for pico host boot loader.
 //!
-use clap;
+use clap::Parser;
 use duct::cmd;
 use std::env;
 use std::path::{Path, PathBuf};
-use std::process;
 
-/// BuildProfile defines whether we build in release or
-/// debug mode.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum BuildProfile {
-    Debug,
-    Release,
+#[derive(Parser)]
+#[command(
+    name = "phbl",
+    author = "Oxide Computer Company",
+    version = "0.1.0",
+    about = "xtask build tool for pico host boot loader"
+)]
+struct Xtask {
+    #[clap(subcommand)]
+    cmd: Command,
+}
+
+#[derive(Parser)]
+enum Command {
+    /// Builds phbl
+    Build {
+        #[clap(flatten)]
+        profile: BuildProfile,
+        #[clap(flatten)]
+        locked: Locked,
+
+        /// Path to compressed CPIO archive
+        #[clap(long)]
+        cpioz: PathBuf,
+    },
+    /// cargo clean
+    Clean,
+    /// Run cargo clippy linter
+    Clippy {
+        #[clap(flatten)]
+        locked: Locked,
+    },
+    /// disassemble phbl
+    Disasm {
+        #[clap(flatten)]
+        profile: BuildProfile,
+        #[clap(flatten)]
+        locked: Locked,
+
+        /// Interleave source and assembler output
+        #[clap(long)]
+        source: bool,
+
+        /// Path to compressed CPIO archive
+        #[clap(long, default_value = "/dev/null")]
+        cpioz: PathBuf,
+    },
+    /// Expand macros
+    Expand,
+    /// Run unit tests
+    Test {
+        #[clap(flatten)]
+        profile: BuildProfile,
+        #[clap(flatten)]
+        locked: Locked,
+    },
+}
+
+/// Mutually exclusive debug/release flags, used by all commands
+/// that run builds.
+#[derive(Clone, Parser)]
+struct BuildProfile {
+    /// Build debug version (default)
+    #[clap(long, conflicts_with_all = &["release"])]
+    debug: bool,
+
+    /// Build optimized version
+    #[clap(long)]
+    release: bool,
 }
 
 impl BuildProfile {
-    /// Returns a new BuildProfile constructed from the
-    /// given args.
-    fn new(matches: &clap::ArgMatches) -> BuildProfile {
-        if matches.get_flag("release") {
-            BuildProfile::Release
-        } else {
-            BuildProfile::Debug
-        }
+    // Returns the cargo argument corresponding to the given
+    // profile.
+    fn to_str(&self) -> &'static str {
+        self.release.then_some("--release").unwrap_or("")
     }
 
-    /// Returns the subdirectory component corresponding
-    /// to the build type.
-    fn dir(self) -> &'static Path {
-        Path::new(match self {
-            Self::Debug => "debug",
-            Self::Release => "release",
-        })
-    }
-
-    /// Yields the appropriate cargo argument for the given
-    /// build profile.
-    fn build_type(self) -> Option<&'static str> {
-        match self {
-            Self::Release => Some("--release"),
-            Self::Debug => None,
-        }
+    // Returns the output subdirectory component corresponding
+    // to the profile.
+    fn dir(&self) -> &'static Path {
+        Path::new(if self.release { "release" } else { "debug" })
     }
 }
 
-/// Build arguments including path to the compressed
-/// cpio archive we use as a "ramdisk
-#[derive(Clone, Debug)]
-struct BuildArgs {
-    profile: BuildProfile,
-    cpioz: String,
+/// Cargo `--locked` setting; separate from BuildProfile because
+/// `clippy` uses it but doesn't care about debug/release.
+#[derive(Parser)]
+struct Locked {
+    /// Build locked to Cargo.lock
+    #[clap(long)]
+    locked: bool,
 }
 
-impl BuildArgs {
-    /// Extracts the build profile type from the given matched
-    /// arguments.  Debug is the default.
-    fn new(matches: &clap::ArgMatches) -> BuildArgs {
-        let profile = BuildProfile::new(matches);
-        let cpioz = matches.get_one::<String>("cpioz").unwrap().to_string();
-        BuildArgs { profile, cpioz }
+impl Locked {
+    fn to_str(&self) -> &str {
+        self.locked.then_some("--locked").unwrap_or("")
     }
 }
 
 fn main() {
-    let matches = parse_args();
-    match matches.subcommand() {
-        Some(("build", m)) => build(BuildArgs::new(m), m.get_flag("locked")),
-        Some(("test", m)) => test(BuildProfile::new(m), m.get_flag("locked")),
-        Some(("disasm", m)) => disasm(
-            BuildArgs::new(m),
-            m.get_flag("locked"),
-            m.get_flag("source").then_some("-S"),
-        ),
-        Some(("expand", _m)) => expand(),
-        Some(("clippy", m)) => clippy(m.get_flag("locked")),
-        Some(("clean", _m)) => clean(),
-        _ => {
-            println!("Unknown command");
-            process::exit(1);
+    let xtask = Xtask::parse();
+    match xtask.cmd {
+        Command::Build { profile, locked, cpioz } => {
+            build(profile, locked, cpioz)
         }
+        Command::Test { profile, locked } => test(profile, locked),
+        Command::Disasm { profile, locked, source, cpioz } => {
+            disasm(profile, locked, source, cpioz)
+        }
+        Command::Expand => expand(),
+        Command::Clippy { locked } => clippy(locked),
+        Command::Clean => clean(),
     }
 }
 
-/// Parse program arguments and return the match structure.
-fn parse_args() -> clap::ArgMatches {
-    clap::Command::new("xtask")
-        .version("0.1.0")
-        .author("Oxide Computer Company")
-        .about("xtask build tool for pico host boot loader")
-        .subcommand(
-            clap::Command::new("build").about("Builds phbl").args(&[
-                clap::arg!(--locked "Build locked to Cargo.lock"),
-                clap::arg!(--release "Build optimized version")
-                    .conflicts_with("debug"),
-                clap::arg!(--debug "Build debug version (default)")
-                    .conflicts_with("release"),
-                clap::Arg::new("cpioz")
-                    .help("Path to compressed CPIO archive")
-                    .long("cpioz")
-                    .num_args(1)
-                    .required(true),
-            ]),
-        )
-        .subcommand(
-            clap::Command::new("test").about("Run unit tests").args(&[
-                clap::arg!(--locked "Build or test locked to Cargo.lock"),
-                clap::arg!(--release "Test optimized version")
-                    .conflicts_with("debug"),
-                clap::arg!(--debug "Test debug version (default)")
-                    .conflicts_with("release"),
-            ]),
-        )
-        .subcommand(
-            clap::Command::new("disasm").about("disassemble phbl").args(&[
-                clap::arg!(--locked "Build locked to Cargo.lock"),
-                clap::arg!(--release "Disassemble optimized version")
-                    .conflicts_with("debug"),
-                clap::arg!(--debug "Disassemble debug version (default)")
-                    .conflicts_with("release"),
-                clap::arg!(--source "Interleave source and assembler output"),
-                clap::Arg::new("cpioz")
-                    .help("Path to compressed CPIO archive")
-                    .long("cpioz")
-                    .num_args(1)
-                    .required(true),
-            ]),
-        )
-        .subcommand(clap::Command::new("expand").about("Expand macros"))
-        .subcommand(
-            clap::Command::new("clippy")
-                .about("Run cargo clippy linter")
-                .args(&[clap::arg!(--locked "Lint locked to Cargo.lock")]),
-        )
-        .subcommand(clap::Command::new("clean").about("cargo clean"))
-        .get_matches()
-}
-
 /// Runs a cross-compiled build.
-fn build(args: BuildArgs, with_locked: bool) {
-    std::env::set_var("PHBL_PHASE1_COMPRESSED_CPIO_ARCHIVE_PATH", args.cpioz);
-    let build_type = args.profile.build_type().unwrap_or("");
-    let locked = with_locked.then_some("--locked").unwrap_or("");
+fn build(profile: BuildProfile, locked: Locked, cpioz: PathBuf) {
+    std::env::set_var("PHBL_PHASE1_COMPRESSED_CPIO_ARCHIVE_PATH", cpioz);
+    let profile = profile.to_str();
+    let locked = locked.to_str();
     let target = target();
     let args = format!(
-        "build {locked} {build_type} \
+        "build {profile} {locked} \
             -Z build-std=core,alloc \
             -Z build-std-features=compiler-builtins-mem \
             --target {target}.json"
@@ -157,20 +142,21 @@ fn build(args: BuildArgs, with_locked: bool) {
 }
 
 /// Runs tests.
-fn test(profile: BuildProfile, with_locked: bool) {
-    let build_type = profile.build_type().unwrap_or("");
-    let locked = with_locked.then_some("--locked").unwrap_or("");
-    let args = format!("test {locked} {build_type}");
+fn test(profile: BuildProfile, locked: Locked) {
+    let profile = profile.to_str();
+    let locked = locked.to_str();
+    let args = format!("test {profile} {locked}");
     cmd(cargo(), args.split_whitespace()).run().expect("test successful");
 }
 
 /// Build and disassemble the phbl binary.
-fn disasm(build_args: BuildArgs, with_locked: bool, flags: Option<&str>) {
-    build(build_args.clone(), with_locked);
+fn disasm(profile: BuildProfile, locked: Locked, source: bool, cpioz: PathBuf) {
+    build(profile.clone(), locked, cpioz);
     let triple = target();
-    let profile_dir = build_args.profile.dir().to_str().unwrap();
-    let flags = flags.unwrap_or("");
+    let profile_dir = profile.dir().to_str().unwrap();
+    let flags = source.then_some("-S").unwrap_or("");
     let args = format!("-Cd {flags} target/{triple}/{profile_dir}/phbl");
+    println!("args = {args}");
     cmd(objdump(), args.split_whitespace())
         .run()
         .expect("disassembly successful");
@@ -184,8 +170,8 @@ fn expand() {
 }
 
 /// Runs the Clippy linter.
-fn clippy(with_locked: bool) {
-    let locked = with_locked.then_some("--locked").unwrap_or("");
+fn clippy(locked: Locked) {
+    let locked = locked.to_str();
     let args = format!("clippy {locked}");
     cmd(cargo(), args.split_whitespace()).run().expect("clippy successful");
 }
@@ -213,26 +199,5 @@ fn target() -> String {
 
 /// Locates the LLVM objdump binary.
 fn objdump() -> String {
-    env_or("OBJDUMP", &toolchain_binary("llvm-objdump"))
-}
-
-/// Attempts to locate a program shipped with the toolchain.
-fn toolchain_binary(program: &str) -> String {
-    let toolchain = env_or("RUSTUP_TOOLCHAIN", "x86_64-unknown-none");
-    let pos = toolchain.find('-').map(|p| p + 1).unwrap_or(0);
-    let host = toolchain[pos..].to_string();
-    let home = env_or("RUSTUP_HOME", "");
-    let mut path = PathBuf::from(home);
-    path.push("toolchains");
-    path.push(toolchain);
-    path.push("lib");
-    path.push("rustlib");
-    path.push(host);
-    path.push("bin");
-    path.push(program);
-    if path.exists() {
-        path.into_os_string().into_string().unwrap()
-    } else {
-        program.into()
-    }
+    env_or("OBJDUMP", "llvm-objdump".into())
 }
