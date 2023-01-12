@@ -23,7 +23,7 @@ impl BuildProfile {
     /// Returns a new BuildProfile constructed from the
     /// given args.
     fn new(matches: &clap::ArgMatches) -> BuildProfile {
-        if matches.contains_id("release") {
+        if matches.get_flag("release") {
             BuildProfile::Release
         } else {
             BuildProfile::Debug
@@ -70,17 +70,15 @@ impl BuildArgs {
 fn main() {
     let matches = parse_args();
     match matches.subcommand() {
-        Some(("build", m)) => build(BuildArgs::new(m), m.contains_id("locked")),
-        Some(("test", m)) => {
-            test(BuildProfile::new(m), m.contains_id("locked"))
-        }
+        Some(("build", m)) => build(BuildArgs::new(m), m.get_flag("locked")),
+        Some(("test", m)) => test(BuildProfile::new(m), m.get_flag("locked")),
         Some(("disasm", m)) => disasm(
             BuildArgs::new(m),
-            m.contains_id("locked"),
-            m.contains_id("source").then_some("-S"),
+            m.get_flag("locked"),
+            m.get_flag("source").then_some("-S"),
         ),
         Some(("expand", _m)) => expand(),
-        Some(("clippy", m)) => clippy(m.contains_id("locked")),
+        Some(("clippy", m)) => clippy(m.get_flag("locked")),
         Some(("clean", _m)) => clean(),
         _ => {
             println!("Unknown command");
@@ -102,8 +100,10 @@ fn parse_args() -> clap::ArgMatches {
                     .conflicts_with("debug"),
                 clap::arg!(--debug "Build debug version (default)")
                     .conflicts_with("release"),
-                clap::arg!(--cpioz "Path to compressed CPIO archive")
-                    .takes_value(true)
+                clap::Arg::new("cpioz")
+                    .help("Path to compressed CPIO archive")
+                    .long("cpioz")
+                    .num_args(1)
                     .required(true),
             ]),
         )
@@ -124,9 +124,11 @@ fn parse_args() -> clap::ArgMatches {
                 clap::arg!(--debug "Disassemble debug version (default)")
                     .conflicts_with("release"),
                 clap::arg!(--source "Interleave source and assembler output"),
-                clap::arg!(--cpioz "Path to compressed CPIO archive")
-                    .takes_value(true)
-                    .default_value("/dev/null"),
+                clap::Arg::new("cpioz")
+                    .help("Path to compressed CPIO archive")
+                    .long("cpioz")
+                    .num_args(1)
+                    .required(true),
             ]),
         )
         .subcommand(clap::Command::new("expand").about("Expand macros"))
