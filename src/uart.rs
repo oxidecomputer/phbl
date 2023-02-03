@@ -254,6 +254,7 @@ const UART_MMIO_BASE_ADDR: usize = 0xFEDC_9000;
 /// Describes the UART registers when the divisor latch is set
 /// in the line control register.  This is the state in that
 /// that the UART is in after calling Device::reset.
+#[repr(C)]
 struct ConfigMmio {
     dll: Dll,
     dlh: Dlh,
@@ -371,6 +372,7 @@ struct MmioRead {
 const_assert_eq!(core::mem::size_of::<MmioRead>(), 256);
 
 /// Describes the UART registers for a write
+#[repr(C)]
 struct MmioWrite {
     thr: Thr,         // 0x00
     _ier: u32,        // 0x04
