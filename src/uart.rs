@@ -15,7 +15,7 @@
 use bitstruct::bitstruct;
 use core::fmt;
 use core::ptr;
-use once_cell::race::OnceBool;
+use core::sync::atomic::{AtomicBool, Ordering};
 use static_assertions::const_assert_eq;
 
 bitstruct! {
@@ -417,10 +417,10 @@ pub enum Device {
     _Uart3 = UART_MMIO_BASE_ADDR + 0x6000,
 }
 
-static UART0_INITED: OnceBool = OnceBool::new();
-static UART1_INITED: OnceBool = OnceBool::new();
-static UART2_INITED: OnceBool = OnceBool::new();
-static UART3_INITED: OnceBool = OnceBool::new();
+static UART0_INITED: AtomicBool = AtomicBool::new(false);
+static UART1_INITED: AtomicBool = AtomicBool::new(false);
+static UART2_INITED: AtomicBool = AtomicBool::new(false);
+static UART3_INITED: AtomicBool = AtomicBool::new(false);
 
 impl Device {
     /// Returns the base virtual address of the device's
@@ -461,7 +461,7 @@ pub struct Uart(Device);
 
 impl Uart {
     pub fn uart0() -> Uart {
-        assert!(UART0_INITED.get().unwrap());
+        assert!(UART0_INITED.load(Ordering::Acquire));
         Uart(Device::Uart0)
     }
 
@@ -522,12 +522,12 @@ pub fn cons() -> Uart {
 /// The caller must ensure that MMIO space for the UARTs is
 /// properly mapped before calling this.
 pub fn init() {
-    UART0_INITED.get_or_init(|| {
-        Device::Uart0.init(Rate::B3M, Datas::Bits8, Stops::Stop1, Parity::No)
-    });
-    UART1_INITED.set(false).unwrap();
-    UART2_INITED.set(false).unwrap();
-    UART3_INITED.set(false).unwrap();
+    if !UART0_INITED.swap(true, Ordering::AcqRel) {
+        Device::Uart0.init(Rate::B3M, Datas::Bits8, Stops::Stop1, Parity::No);
+    }
+    UART1_INITED.store(false, Ordering::Release);
+    UART2_INITED.store(false, Ordering::Release);
+    UART3_INITED.store(false, Ordering::Release);
 }
 
 /// By implementing `Write` on the UART, we can implement the
