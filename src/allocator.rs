@@ -116,16 +116,11 @@ mod bump_tests {
 
 #[cfg(not(any(test, feature = "cargo-clippy")))]
 mod global {
-    use super::{alloc, BumpAlloc};
+    use super::BumpAlloc;
 
     const HEAP_SIZE: usize = 2 * 1024 * 1024;
 
     #[global_allocator]
     static mut BUMP_ALLOCATOR: BumpAlloc<HEAP_SIZE> =
         BumpAlloc::new([0; HEAP_SIZE]);
-
-    #[alloc_error_handler]
-    pub fn oom(layout: alloc::alloc::Layout) -> ! {
-        panic!("Early allocation failed on size {}", layout.size());
-    }
 }
