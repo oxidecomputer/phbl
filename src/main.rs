@@ -79,7 +79,7 @@ fn find_kernel(cpio: &[u8]) -> &[u8] {
 #[cfg(not(any(test, feature = "cargo-clippy")))]
 mod no_std {
     #[panic_handler]
-    pub extern "C" fn panic(info: &core::panic::PanicInfo) -> ! {
+    pub fn panic(info: &core::panic::PanicInfo) -> ! {
         crate::println!("Panic: {:#?}", info);
         unsafe {
             crate::phbl::dnr();
