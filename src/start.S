@@ -3,8 +3,8 @@
 //
 // This code is responsible for setting up an execution
 // environment for Rust code, and nothing more.  We do the bare
-// minimum that we must in assembler and leave the heavy lifting
-// to Rust.
+// minimum reqired in assembler and leave the heavy lifting to
+// Rust.
 
 // Definitions for bits in %cr0.
 CR0_PE =		1 << 0
@@ -84,9 +84,8 @@ reset:
 //
 // Note that since there is no firmware to set the A20
 // latch, we do not have to deal with it.  Similarly,
-// we do not mask out the PIC, as there is no PIC on an
-// Oxide machine and this code is specific to Oxide
-// machines.
+// we do not mask out the PIC, as there is no PIC on
+// Oxide machines.
 .section ".start", "ax", @progbits
 .balign PAGE_SIZE
 .code16
@@ -96,26 +95,22 @@ start:
 
 	// Coming out of reset, caching and write-back are
 	// disabled.  Clear the cache-inhibiting bits in %cr0
-	// by resetting the state of %cr0 to have only the
-	// reserved bits; in this case, only CR0_ET is set.
+	// by setting the register to have only the reserved
+	// bits set: in this case, only CR0_ET.
 	movl	$CR0_MB1, %eax
 	movl	%eax, %cr0
 
 	// Set up a GDT.  Since we are in 16-bit real mode, the
-	// GDT descriptor must be within the current segment.
-	// We know that such a GDT descriptor is present because
-	// we force the linker to put one in the current segment.
-	// But we choose not to rely on exact knowledge of where
-	// in the segment the linker put it, so we calculate its
-	// offset.  We know that the reset vector is exactly 16
-	// bytes before the end of the segment, which provides
-	// enough information to calculate the segment base
-	// address and thus the segment-relative descriptor
-	// offset.
+	// GDT descriptor must be within the current segment,
+	// and we know one is present because the linker put one
+	// there.  We calculate its offset and load it into the
+	// GDTR.
+	//
+	// Note that the GDT remains at the same linear address,
+	// which is within the first 4GiB of address space, for
+	// the lifetime of the program.  Thus, we do not bother
+	// rewriting the GDTR as we move to different modes.
 	movl	$gdtdesc, %ebx
-	movl	$reset, %eax
-	subl	$(64 * 1024 - 16), %eax
-	subl	%eax, %ebx
 	andl	$SEG16_MASK, %ebx
 	lgdtl	%cs:(%bx)
 
@@ -130,20 +125,20 @@ start:
 .balign 64
 .code32
 1:
-	// Set up data segmentation.  We now have access to the
-	// full 32-bit linear address space accessible from
-	// protected mode.  We don't use FS or GS in the boot
-	// strap code, so leave those at their reset (0) values.
+	// Set up data segmentation so that we have access to
+	// the full 32-bit protected mode address space.  We
+	// don't use FS or GS in the bootstrap code, so leave
+	// those at their reset values (0).
 	movw	$GDT_DATA32, %ax
 	movw	%ax, %ds
 	movw	%ax, %es
 	movw	%ax, %ss
 
 	// Enable MTRRs and set the default memory access type
-	// to writeback.  Without enabling MTRRs, all of
-	// physical memory is considered UC; by setting this to
-	// writeback, we enable caching control via page
-	// attribute bits in PTEs.
+	// to writeback.  Coming out of reset, all of physical
+	// memory is considered UC.  Enabling MTRRs and setting
+	// this to writeback enables cache control via
+	// attributes in page table entries.
 	// See Intel SDM vol 3A sec 11.11.2.1 for details.
 	movl	$IA32_MTRR_DEF_TYPE_MSR, %ecx
 	movl	$(MTRR_ENABLE | MTRR_WB), %eax
@@ -159,7 +154,8 @@ start:
 	movl	$pml4, %eax
 	movl	%eax, %cr3
 
-	// Enable long mode and the NX bit.
+	// Enable long mode and support for the the NX bit in
+	// PTEs.
 	movl	$IA32_EFER_MSR, %ecx
 	movl	$(EFER_LME | EFER_NX), %eax
 	xorl	%edx, %edx
@@ -167,8 +163,8 @@ start:
 
 	// Enable paging and write-protect enforcement for the
 	// kernel.  Since PAE is enabled in %cr4 and long mode
-	// is enabled in the EFER MSR, the MMU will use 4
-	// level paging.
+	// is enabled in the EFER MSR, the MMU uses 4 level
+	// paging.
 	movl	%cr0, %eax
 	orl	$(CR0_PG | CR0_WP), %eax
 	movl	%eax, %cr0
@@ -201,7 +197,7 @@ gdtdesc:
 .code64
 start64:
 	// Clear the segmentation registers.
-	// %fs and %fs were cleared on reset, so no
+	// %fs and %gs were cleared on reset, so no
 	// need to clear them again.
 	xorl	%eax, %eax
 	movw	%ax, %ds
@@ -219,11 +215,11 @@ start64:
 	movq	$stack, %rsp
 	addq	$STACK_SIZE, %rsp
 
-	// Call init.  This remaps the kernel, initializes the
+	// Call `init`.  This remaps the kernel, initializes the
 	// UART, and sets up the IDT.  It also validates the
 	// BIST data.  If init completes successfully, we call
-	// entry with its return value, a mutable reference
-	// to the system Config.
+	// `entry` with its return value, a mutable reference
+	// to the system `Config`.
 	movl	%ebp, %edi
 	xorl	%ebp, %ebp
 	call	init
