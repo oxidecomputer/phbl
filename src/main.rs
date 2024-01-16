@@ -4,6 +4,7 @@
 
 #![feature(allocator_api, new_uninit)]
 #![feature(asm_const)]
+#![feature(exposed_provenance)]
 #![feature(naked_functions)]
 #![feature(pointer_is_aligned)]
 #![feature(strict_provenance)]
