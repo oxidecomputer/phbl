@@ -326,6 +326,6 @@ pub(crate) fn init() {
     unsafe {
         static mut IDT: Idt = Idt::empty();
         IDT.init();
-        lidt(&IDT);
+        lidt(&*core::ptr::addr_of!(IDT));
     }
 }
