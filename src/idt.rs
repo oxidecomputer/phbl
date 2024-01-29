@@ -63,21 +63,6 @@ impl GateDesc {
     }
 }
 
-/// Loads the given IDT into the CPU.  Creates an IDT descriptor
-/// on the stack and invokes the `lidt` instruction.
-unsafe fn lidt(idt: &'static Idt) {
-    const LIMIT: u16 = core::mem::size_of::<Idt>() as u16 - 1;
-    unsafe {
-        asm!(r#"
-            subq $16, %rsp;
-            movq {}, 8(%rsp);
-            movw ${}, 6(%rsp);
-            lidt 6(%rsp);
-            addq $16, %rsp;
-            "#, in(reg) idt, const LIMIT, options(att_syntax));
-    }
-}
-
 /// The trap frame captured by software on exceptions
 #[derive(Copy, Clone, Debug)]
 #[repr(C)]
@@ -262,6 +247,21 @@ impl Idt {
             )*]
         });
     }
+
+    /// Loads the IDT into the CPU.  Creates an IDT descriptor
+    /// on the stack and invokes the `lidt` instruction.
+    unsafe fn load(&'static mut self) {
+        const LIMIT: u16 = core::mem::size_of::<Idt>() as u16 - 1;
+        unsafe {
+            asm!(r#"
+                subq $16, %rsp;
+                movq {}, 8(%rsp);
+                movw ${}, 6(%rsp);
+                lidt 6(%rsp);
+                addq $16, %rsp;
+                "#, in(reg) self, const LIMIT, options(att_syntax));
+        }
+    }
 }
 
 extern "C" fn trap(frame: &mut TrapFrame) {
@@ -318,14 +318,16 @@ unsafe fn backtrace(mut rbp: u64) {
 /// Initialize and load the IDT.
 /// Should be called exactly once, early in boot.
 pub(crate) fn init() {
+    use core::cell::SyncUnsafeCell;
     use core::sync::atomic::{AtomicBool, Ordering};
     static INITED: AtomicBool = AtomicBool::new(false);
     if INITED.swap(true, Ordering::AcqRel) {
         panic!("IDT already initialized");
     }
+    static IDT: SyncUnsafeCell<Idt> = SyncUnsafeCell::new(Idt::empty());
+    let idt = unsafe { &mut *IDT.get() };
+    idt.init();
     unsafe {
-        static mut IDT: Idt = Idt::empty();
-        IDT.init();
-        lidt(&*core::ptr::addr_of!(IDT));
+        idt.load();
     }
 }
