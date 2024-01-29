@@ -8,6 +8,7 @@
 #![feature(naked_functions)]
 #![feature(pointer_is_aligned)]
 #![feature(strict_provenance)]
+#![feature(sync_unsafe_cell)]
 #![cfg_attr(not(any(test, feature = "cargo-clippy")), no_std)]
 #![cfg_attr(not(test), no_main)]
 #![forbid(unsafe_op_in_unsafe_fn)]
