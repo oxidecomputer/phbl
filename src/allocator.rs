@@ -114,7 +114,7 @@ mod bump_tests {
     }
 }
 
-#[cfg(not(any(test, feature = "cargo-clippy")))]
+#[cfg(not(any(test, clippy)))]
 mod global {
     use super::BumpAlloc;
 

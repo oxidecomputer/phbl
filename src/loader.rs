@@ -10,13 +10,15 @@ extern crate alloc;
 use crate::mem;
 use crate::mmu::LoaderPageTable;
 use crate::Result;
+#[cfg(not(any(test, clippy)))]
 use alloc::vec::Vec;
 use goblin::container::{Container, Ctx, Endian};
 use goblin::elf::program_header::PT_LOAD;
 use goblin::elf::ProgramHeader;
 use goblin::elf::{self, Elf};
 
-type Thunk = unsafe extern "C" fn(ramdisk_addr: u64, ramdisk_len: usize);
+type Thunk =
+    unsafe extern "C" fn(ramdisk_paddr: u64, ramdisk_len: usize, flags: u64);
 
 /// Loads an executable image contained in the given byte slice,
 /// creating virtual mappings as required.  Returns the image's

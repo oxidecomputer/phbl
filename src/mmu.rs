@@ -107,7 +107,9 @@
 extern crate alloc;
 
 use crate::mem;
+#[cfg(not(any(test, clippy)))]
 use alloc::boxed::Box;
+#[cfg(not(any(test, clippy)))]
 use alloc::vec::Vec;
 use bitstruct::bitstruct;
 use core::ops::Range;
@@ -232,7 +234,9 @@ enum Mapping1 {
 impl Mapping for Mapping1 {
     fn virt_addr(&self) -> *const () {
         match self {
-            Mapping1::Map4K(page, _, _) => core::ptr::invalid(page.addr()),
+            Mapping1::Map4K(page, _, _) => {
+                core::ptr::without_provenance(page.addr())
+            }
         }
     }
 }
@@ -246,7 +250,9 @@ enum Mapping2 {
 impl Mapping for Mapping2 {
     fn virt_addr(&self) -> *const () {
         match self {
-            Mapping2::Map2M(page, _, _) => core::ptr::invalid(page.addr()),
+            Mapping2::Map2M(page, _, _) => {
+                core::ptr::without_provenance(page.addr())
+            }
             Mapping2::Next(mapping1) => mapping1.virt_addr(),
         }
     }
@@ -261,7 +267,9 @@ enum Mapping3 {
 impl Mapping for Mapping3 {
     fn virt_addr(&self) -> *const () {
         match self {
-            Mapping3::Map1G(page, _, _) => core::ptr::invalid(page.addr()),
+            Mapping3::Map1G(page, _, _) => {
+                core::ptr::without_provenance(page.addr())
+            }
             Mapping3::Next(mapping2) => mapping2.virt_addr(),
         }
     }
@@ -432,7 +440,7 @@ impl PTE {
     /// Tables are taken from the identity mapped region of the
     /// address space.
     unsafe fn virt_addr(self) -> *const () {
-        core::ptr::invalid(self.phys_addr() as usize)
+        core::ptr::without_provenance(self.phys_addr() as usize)
     }
 }
 
@@ -976,7 +984,8 @@ mod tests {
         // Examine the PML3 entries.  There should be a single
         // entry pointing to a PML2 for the loader, and two huge
         // pages for MMIO space.
-        let pml3 = pml4.next_mut(core::ptr::invalid(0x8000_0000)).unwrap();
+        let pml3 =
+            pml4.next_mut(core::ptr::without_provenance(0x8000_0000)).unwrap();
         let n = pml3.entries.iter().filter(|&e| e.p()).count();
         assert_eq!(n, 3);
         let l0g = pml3.entries[0];
@@ -1008,7 +1017,8 @@ mod tests {
 
         // Check the PML2 entries.  The PML2 maps a gigabyte of
         // address space from 0 to 0x4000_0000.
-        let pml2 = pml3.next_mut(core::ptr::invalid(0x1000_0000)).unwrap();
+        let pml2 =
+            pml3.next_mut(core::ptr::without_provenance(0x1000_0000)).unwrap();
         let n = pml2.entries.iter().filter(|&e| e.p()).count();
         assert_eq!(n, 512 - 512 / 4);
         // The lower quarter of the PML2 should be empty.
@@ -1044,7 +1054,8 @@ mod tests {
         // Check the 4KiB PML1 entries.  There should be one
         // text page, two RO data pages, and a bunch of RW
         // data pages.
-        let pml1 = pml2.next_mut(core::ptr::invalid(0x1000_0000)).unwrap();
+        let pml1 =
+            pml2.next_mut(core::ptr::without_provenance(0x1000_0000)).unwrap();
         // Text.
         assert!(pml1.entries[0].p());
         assert!(!pml1.entries[0].w());
