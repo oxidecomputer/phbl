@@ -9,7 +9,7 @@
 #![feature(pointer_is_aligned)]
 #![feature(strict_provenance)]
 #![feature(sync_unsafe_cell)]
-#![cfg_attr(not(any(test, feature = "cargo-clippy")), no_std)]
+#![cfg_attr(not(any(test, clippy)), no_std)]
 #![cfg_attr(not(test), no_main)]
 #![forbid(unsafe_op_in_unsafe_fn)]
 
@@ -35,7 +35,7 @@ pub(crate) extern "C" fn entry(config: &mut phbl::Config) {
         loader::load(&mut config.page_table, kernel).expect("loaded kernel");
     println!("jumping to kernel entry at {:#x?}", entry as *const fn());
     unsafe {
-        entry(ramdisk.as_ptr().addr() as u64, ramdisk.len());
+        entry(ramdisk.as_ptr().addr() as u64, ramdisk.len(), 0);
     }
     panic!("main returning");
 }
@@ -78,7 +78,7 @@ fn find_kernel(cpio: &[u8]) -> &[u8] {
     panic!("could not locate unix in cpio archive");
 }
 
-#[cfg(not(any(test, feature = "cargo-clippy")))]
+#[cfg(not(any(test, clippy)))]
 mod no_std {
     #[panic_handler]
     pub fn panic(info: &core::panic::PanicInfo) -> ! {

@@ -42,6 +42,7 @@ use crate::idt;
 use crate::mem;
 use crate::mmu;
 use crate::uart::{self, Uart};
+#[cfg(not(any(test, clippy)))]
 use alloc::boxed::Box;
 use core::fmt;
 use core::ops::Range;
@@ -176,7 +177,7 @@ pub(crate) fn ramdisk_region_init_mut() -> &'static mut [u8] {
     let text = text_addr().addr();
     const PHBL_MIN: usize = 2 * mem::GIB - 256 * mem::MIB;
     assert!(PHBL_MIN < cpio && cpio < text);
-    const PHBL_BASE: *mut u8 = core::ptr::invalid_mut(PHBL_MIN);
+    const PHBL_BASE: *mut u8 = core::ptr::without_provenance_mut(PHBL_MIN);
     let len = text - cpio;
     let cpio = PHBL_BASE.with_addr(cpio);
     unsafe {
