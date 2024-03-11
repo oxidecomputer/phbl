@@ -31,6 +31,10 @@ enum Command {
         #[clap(flatten)]
         locked: Locked,
 
+        /// Features
+        #[clap(long)]
+        features: Option<String>,
+
         /// Path to compressed CPIO archive
         #[clap(long)]
         cpioz: PathBuf,
@@ -48,6 +52,10 @@ enum Command {
         profile: BuildProfile,
         #[clap(flatten)]
         locked: Locked,
+
+        /// Features
+        #[clap(long)]
+        features: Option<String>,
 
         /// Interleave source and assembler output
         #[clap(long)]
@@ -113,12 +121,12 @@ impl Locked {
 fn main() {
     let xtask = Xtask::parse();
     match xtask.cmd {
-        Command::Build { profile, locked, cpioz } => {
-            build(profile, locked, cpioz)
+        Command::Build { profile, locked, features, cpioz } => {
+            build(profile, locked, features, cpioz)
         }
         Command::Test { profile, locked } => test(profile, locked),
-        Command::Disasm { profile, locked, source, cpioz } => {
-            disasm(profile, locked, source, cpioz)
+        Command::Disasm { profile, locked, features, source, cpioz } => {
+            disasm(profile, locked, features, source, cpioz)
         }
         Command::Expand => expand(),
         Command::Clippy { locked } => clippy(locked),
@@ -127,13 +135,19 @@ fn main() {
 }
 
 /// Runs a cross-compiled build.
-fn build(profile: BuildProfile, locked: Locked, cpioz: PathBuf) {
+fn build(
+    profile: BuildProfile,
+    locked: Locked,
+    features: Option<String>,
+    cpioz: PathBuf,
+) {
     std::env::set_var("PHBL_PHASE1_COMPRESSED_CPIO_ARCHIVE_PATH", cpioz);
     let profile = profile.to_str();
     let locked = locked.to_str();
     let target = target();
+    let features = features.map_or("".into(), |f| format!("--features={f}"));
     let args = format!(
-        "build {profile} {locked} \
+        "build {profile} {locked} {features} \
             -Z build-std=core,alloc \
             -Z build-std-features=compiler-builtins-mem \
             --target {target}.json"
@@ -150,8 +164,14 @@ fn test(profile: BuildProfile, locked: Locked) {
 }
 
 /// Build and disassemble the phbl binary.
-fn disasm(profile: BuildProfile, locked: Locked, source: bool, cpioz: PathBuf) {
-    build(profile.clone(), locked, cpioz);
+fn disasm(
+    profile: BuildProfile,
+    locked: Locked,
+    features: Option<String>,
+    source: bool,
+    cpioz: PathBuf,
+) {
+    build(profile.clone(), locked, features, cpioz);
     let triple = target();
     let profile_dir = profile.dir().to_str().unwrap();
     let flags = source.then_some("-S").unwrap_or("");
