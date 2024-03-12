@@ -11,7 +11,7 @@ license = "MPL-2.0"
 bit_field = "0.10"
 bitstruct = "0.1"
 cpio_reader = "0.1"
-goblin = { version = "0.7", default-features = false, features = [
+goblin = { version = "0.8", default-features = false, features = [
     "endian_fd",
     "elf64",
     "elf32",
