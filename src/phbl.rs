@@ -89,8 +89,8 @@ pub(crate) unsafe extern "C" fn init(bist: u32) -> &'static mut Config {
     }
     let cons = Uart::uart0();
     let page_table = remap(mem::V4KA::new(cons.addr()));
-    let cpio_region = cpio_addr()..text_addr();
-    let loader_region = text_addr()..eaddr();
+    let cpio_region = cpio_addr()..saddr();
+    let loader_region = saddr()..eaddr();
     let mmio_region = mmio_addr()..mmio_end();
     let reserved_regions = [loader_region.clone(), cpio_region, mmio_region];
     let config = Box::new(Config {
@@ -103,11 +103,12 @@ pub(crate) unsafe extern "C" fn init(bist: u32) -> &'static mut Config {
 
 // Stubs for linker-provided symbols.
 extern "C" {
+    static sbss: [u8; 0];
+    static ebss: [u8; 0];
     static __sloader: [u8; 0];
     static etext: [u8; 0];
     static erodata: [u8; 0];
     static edata: [u8; 0];
-    static end: [u8; 0];
     static __eloader: [u8; 0];
     static bootblock: [u8; 0];
 
@@ -117,7 +118,7 @@ extern "C" {
 /// Returns the address of the start of the cpio archive region.
 fn cpio_addr() -> mem::V4KA {
     const CPIO_LEN: usize = 128 * mem::MIB;
-    mem::V4KA::new(text_addr().addr() - CPIO_LEN)
+    mem::V4KA::new(saddr().addr() - CPIO_LEN)
 }
 
 /// Returns the address of the start of the loader text segment.
@@ -137,14 +138,25 @@ fn data_addr() -> mem::V4KA {
     mem::V4KA::new(unsafe { erodata.as_ptr().addr() })
 }
 
-/// Returns the address of the start of the loader BSS segment.
-fn bss_addr() -> mem::V4KA {
+/// Returns the address of the end of the loader read/write
+/// data segment.
+fn edata_addr() -> mem::V4KA {
     mem::V4KA::new(unsafe { edata.as_ptr().addr() })
 }
 
+/// Returns the address of the start of the loader BSS segment.
+fn bss_addr() -> mem::V4KA {
+    mem::V4KA::new(unsafe { sbss.as_ptr().addr() })
+}
+
 /// Returns the address of the end of the loader BSS.
-fn end_addr() -> mem::V4KA {
-    mem::V4KA::new(unsafe { end.as_ptr().addr() })
+fn ebss_addr() -> mem::V4KA {
+    mem::V4KA::new(unsafe { ebss.as_ptr().addr() })
+}
+
+/// Returns the start of the loader, including all segments.
+fn saddr() -> mem::V4KA {
+    bss_addr()
 }
 
 /// Returns the address of end of the loader memory image,
@@ -174,11 +186,11 @@ fn mmio_end() -> mem::V4KA {
 /// Clears the region.
 pub(crate) fn ramdisk_region_init_mut() -> &'static mut [u8] {
     let cpio = cpio_addr().addr();
-    let text = text_addr().addr();
+    let ecpio = saddr().addr();
     const PHBL_MIN: usize = 2 * mem::GIB - 256 * mem::MIB;
-    assert!(PHBL_MIN < cpio && cpio < text);
+    assert!(PHBL_MIN < cpio && cpio < ecpio);
     const PHBL_BASE: *mut u8 = core::ptr::without_provenance_mut(PHBL_MIN);
-    let len = text - cpio;
+    let len = ecpio - cpio;
     let cpio = PHBL_BASE.with_addr(cpio);
     unsafe {
         core::ptr::write_bytes(cpio, 0, len);
@@ -193,11 +205,11 @@ pub(crate) fn ramdisk_region_init_mut() -> &'static mut [u8] {
 /// properly, enforcing appropriate protections for sections
 /// and so on.
 fn remap(cons_addr: mem::V4KA) -> &'static mut mmu::PageTable {
-    let cpio = cpio_addr()..text_addr();
+    let cpio = cpio_addr()..saddr();
     let text = text_addr()..rodata_addr();
     let rodata = rodata_addr()..data_addr();
-    let data = data_addr()..bss_addr();
-    let bss = bss_addr()..end_addr();
+    let data = data_addr()..edata_addr();
+    let bss = bss_addr()..ebss_addr();
     let boot = bootblock_addr()..eaddr();
 
     let cons_end = mem::V4KA::new(cons_addr.addr() + mem::V4KA::SIZE);

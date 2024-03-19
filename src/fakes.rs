@@ -19,7 +19,10 @@ static erodata: usize = 16384;
 static edata: usize = 32768;
 /// Linker symbol.
 #[no_mangle]
-static end: usize = 65536;
+static sbss: usize = 32768 + 16384;
+/// Linker symbol.
+#[no_mangle]
+static ebss: usize = 65536;
 /// Defined in assembly.
 #[no_mangle]
 static stack: usize = 65536;

@@ -205,8 +205,8 @@ start64:
 	movw	%ax, %ss
 
 	// Zero out the BSS.
-	movq	$end, %rcx
-	movq	$edata, %rdi
+	movq	$ebss, %rcx
+	movq	$sbss, %rdi
 	xorl	%eax, %eax
 	subq	%rdi, %rcx
 	rep; stosb
