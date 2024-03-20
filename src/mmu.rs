@@ -1226,6 +1226,9 @@ mod arena {
     // See RFD215 for details.
     const_assert!(PAGE_ARENA_SIZE > 16 * PAGE_SIZE);
 
+    static mut PAGE_ALLOCATOR: BumpAlloc<{ PAGE_ARENA_SIZE }> =
+        BumpAlloc::new([0; PAGE_ARENA_SIZE]);
+
     /// An allocator specialized for MMU page allocations.
     ///
     /// # Safety
@@ -1251,12 +1254,6 @@ mod arena {
             Ok(ptr as *mut T)
         }
     }
-
-    #[repr(C, align(4096))]
-    struct PageArena([u8; PAGE_ARENA_SIZE]);
-    static mut PAGES: PageArena = PageArena([0; PAGE_ARENA_SIZE]);
-    static mut PAGE_ALLOCATOR: BumpAlloc<{ PAGE_ARENA_SIZE }> =
-        BumpAlloc::new(unsafe { PAGES.0 });
 
     unsafe impl Allocator for TableAlloc {
         fn allocate(
