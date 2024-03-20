@@ -70,7 +70,7 @@ STACK_SIZE =		8 * PAGE_SIZE
 // clear after RESET, but it never hurts to be explicit,
 // so we clear both and then simply jump to the 16-bit
 // startup code.
-.section ".reset", "ax", @progbits
+.section ".reset", "a", @progbits
 .globl reset
 reset:
 	cli
@@ -86,7 +86,7 @@ reset:
 // latch, we do not have to deal with it.  Similarly,
 // we do not mask out the PIC, as there is no PIC on
 // Oxide machines.
-.section ".start", "ax", @progbits
+.section ".start", "a", @progbits
 .balign PAGE_SIZE
 .code16
 start:

@@ -23,6 +23,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 /// A simple bump allocator for use as a global allocator
 /// (for Goblin) as well as implementing the specific
 /// allocator interface (for page tables).
+#[repr(C, align(4096))]
 pub(crate) struct BumpAlloc<const SIZE: usize> {
     heap: UnsafeCell<[u8; SIZE]>,
     offset: AtomicUsize,
