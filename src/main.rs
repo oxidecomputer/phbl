@@ -15,6 +15,7 @@
 
 mod allocator;
 mod idt;
+mod iomux;
 mod loader;
 mod mem;
 mod mmu;

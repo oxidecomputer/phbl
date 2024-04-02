@@ -523,7 +523,7 @@ pub fn cons() -> Uart {
 /// # Safety
 /// The caller must ensure that MMIO space for the UARTs is
 /// properly mapped before calling this.
-pub fn init() {
+pub unsafe fn init() {
     if !UART0_INITED.swap(true, Ordering::AcqRel) {
         Device::Uart0.init(Rate::B3M, Datas::Bits8, Stops::Stop1, Parity::No);
     }
