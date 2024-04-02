@@ -39,6 +39,7 @@
 extern crate alloc;
 
 use crate::idt;
+use crate::iomux;
 use crate::mem;
 use crate::mmu;
 use crate::uart::{self, Uart};
@@ -82,7 +83,10 @@ pub(crate) unsafe extern "C" fn init(bist: u32) -> &'static mut Config {
     if INITED.swap(true, Ordering::AcqRel) {
         panic!("Init already called");
     }
-    uart::init();
+    unsafe {
+        iomux::init();
+        uart::init();
+    }
     idt::init();
     if bist != 0 {
         panic!("bist failed: {bist:#x}");
