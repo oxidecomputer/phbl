@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// Derived form the rxv64 operating system.
+// Derived from the rxv64 operating system.
 
 use crate::println;
 use bit_field::BitField;
