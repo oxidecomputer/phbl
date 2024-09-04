@@ -13,7 +13,7 @@
 	"code-model": "small",
 	"frame-pointer": "always",
 	"disable-redzone": true,
-	"features": "-3dnow,-3dnowa,-avx,-avx2,-avx512bf16,-f16c,-fxsr,-mmx,-sse,-sse2,-sse3,-sse4.1,-sse4.2,-sse4a,-ssse3,-x87,-soft-float",
+	"features": "-avx,-avx2,-avx512bf16,-f16c,-fxsr,-mmx,-sse,-sse2,-sse3,-sse4.1,-sse4.2,-sse4a,-ssse3,-x87,-soft-float",
 	"linker-flavor": "ld",
 	"linker": "gld",
 	"no-default-libraries": "true",

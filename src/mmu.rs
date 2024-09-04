@@ -920,7 +920,7 @@ impl PageTable {
         if !self.is_mapped(va) {
             return Err(Error::BadPointer);
         }
-        let ptr = core::ptr::from_exposed_addr_mut::<()>(va);
+        let ptr = core::ptr::with_exposed_provenance_mut::<()>(va);
         if !ptr.is_aligned_to(core::mem::align_of::<T>()) {
             return Err(Error::BadPointer);
         }
