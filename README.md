@@ -1,8 +1,9 @@
 # Pico Host Boot Loader
 
-`phbl` is the program run from the x86 reset vector that loads
-and invokes the phase1 host operating system package, consisting
-of the host kernel and phase1 cpio archive.
+`phbl` (pronounced "foible") is the program run from the x86
+reset vector that loads and invokes the phase1 host operating
+system package, consisting of the host kernel and phase1 cpio
+archive.
 
 It is loaded from SPI flash by the PSP, and execution starts in
 16-bit real mode.  It is responsible for:
