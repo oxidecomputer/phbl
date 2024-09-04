@@ -2,11 +2,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#![feature(allocator_api, new_uninit)]
-#![feature(asm_const)]
+#![feature(allocator_api)]
 #![feature(exposed_provenance)]
 #![feature(naked_functions)]
-#![feature(pointer_is_aligned)]
+#![feature(pointer_is_aligned_to)]
 #![feature(strict_provenance)]
 #![feature(sync_unsafe_cell)]
 #![cfg_attr(not(any(test, clippy)), no_std)]
@@ -51,9 +50,9 @@ fn expand_ramdisk() -> &'static [u8] {
     use miniz_oxide::inflate::core::DecompressorOxide;
     use miniz_oxide::inflate::TINFLStatus;
 
-    #[cfg(all(target_vendor = "oxide", target_os = "none"))]
+    #[cfg(target_os = "none")]
     let cpio = include_bytes!(env!("PHBL_PHASE1_COMPRESSED_CPIO_ARCHIVE_PATH"));
-    #[cfg(not(all(target_vendor = "oxide", target_os = "none")))]
+    #[cfg(not(target_os = "none"))]
     let cpio = [0u8; 1];
 
     let dst = phbl::ramdisk_region_init_mut();

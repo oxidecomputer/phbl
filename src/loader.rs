@@ -35,7 +35,7 @@ pub(crate) fn load(
         }
         load_segment(page_table, section, &bytes[file_range])?;
     }
-    Ok(unsafe { core::mem::transmute::<_, Thunk>(elf.entry) })
+    Ok(unsafe { core::mem::transmute::<u64, Thunk>(elf.entry) })
 }
 
 /// Parses the ELF executable contained in the given byte slice.
