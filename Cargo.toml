@@ -17,7 +17,7 @@ goblin = { version = "0.8", default-features = false, features = [
     "elf32",
     "alloc",
 ] }
-miniz_oxide = "0.7"
+miniz_oxide = "0.8"
 seq-macro = "0.3"
 static_assertions = "1.1"
 x86 = "0.52"

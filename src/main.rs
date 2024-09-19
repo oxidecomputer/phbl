@@ -33,10 +33,8 @@ pub(crate) extern "C" fn entry(config: &mut phbl::Config) {
     let kernel = find_kernel(ramdisk);
     let entry =
         loader::load(&mut config.page_table, kernel).expect("loaded kernel");
-    println!("jumping to kernel entry at {:#x?}", entry as *const fn());
-    unsafe {
-        entry(ramdisk.as_ptr().addr() as u64, ramdisk.len(), 0);
-    }
+    println!("jumping into kernel...");
+    entry(ramdisk.as_ptr().addr() as u64, ramdisk.len());
     panic!("main returning");
 }
 
