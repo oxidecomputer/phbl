@@ -17,8 +17,14 @@ use goblin::elf::program_header::PT_LOAD;
 use goblin::elf::ProgramHeader;
 use goblin::elf::{self, Elf};
 
-type Thunk =
-    unsafe extern "C" fn(ramdisk_paddr: u64, ramdisk_len: usize, flags: u64);
+type Thunk = unsafe extern "C" fn(
+    ramdisk_paddr: u64,
+    ramdisk_len: usize,
+    _rdx: u64,
+    _rcx: u64,
+    _r8: u64,
+    _r9: u64,
+);
 
 /// Loads an executable image contained in the given byte slice,
 /// creating virtual mappings as required.  Returns the image's
@@ -26,7 +32,7 @@ type Thunk =
 pub(crate) fn load(
     page_table: &mut LoaderPageTable,
     bytes: &[u8],
-) -> Result<Thunk> {
+) -> Result<impl FnOnce(u64, usize)> {
     let elf = parse_elf(bytes)?;
     for section in elf.program_headers.iter().filter(|&h| h.p_type == PT_LOAD) {
         let file_range = section.file_range();
@@ -35,7 +41,10 @@ pub(crate) fn load(
         }
         load_segment(page_table, section, &bytes[file_range])?;
     }
-    Ok(unsafe { core::mem::transmute::<u64, Thunk>(elf.entry) })
+    let entry = unsafe { core::mem::transmute::<u64, Thunk>(elf.entry) };
+    Ok(move |ramdisk_paddr: u64, ramdisk_len: usize| unsafe {
+        entry(ramdisk_paddr, ramdisk_len, 0, 0, 0, 0)
+    })
 }
 
 /// Parses the ELF executable contained in the given byte slice.
