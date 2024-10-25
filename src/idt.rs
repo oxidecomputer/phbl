@@ -7,7 +7,7 @@
 use crate::println;
 use bit_field::BitField;
 use bitstruct::bitstruct;
-use core::arch::asm;
+use core::arch::{asm, naked_asm};
 use core::ptr;
 use seq_macro::seq;
 
@@ -109,9 +109,9 @@ macro_rules! gen_stub {
         #[naked]
         unsafe extern "C" fn $name() -> ! {
             unsafe {
-                asm!("pushq $0; pushq ${}; jmp {}",
+                naked_asm!("pushq $0; pushq ${}; jmp {}",
                     const $vecnum, sym alltraps,
-                    options(att_syntax, noreturn));
+                    options(att_syntax))
             }
         }
     };
@@ -119,9 +119,9 @@ macro_rules! gen_stub {
         #[naked]
         extern "C" fn $name() -> ! {
             unsafe {
-                asm!("pushq ${}; jmp {}",
+                naked_asm!("pushq ${}; jmp {}",
                     const $vecnum, sym alltraps,
-                    options(att_syntax, noreturn));
+                    options(att_syntax))
             }
         }
     };
@@ -169,7 +169,7 @@ seq!(N in 0..=255 {
 #[naked]
 unsafe extern "C" fn alltraps() -> ! {
     unsafe {
-        asm!(r#"
+        naked_asm!(r#"
             // Save the x86 segmentation registers.
             subq $32, %rsp
             movq $0, 24(%rsp);
@@ -222,7 +222,7 @@ unsafe extern "C" fn alltraps() -> ! {
             iretq;
             "#,
             trap = sym trap,
-            options(att_syntax, noreturn));
+            options(att_syntax))
     }
 }
 
