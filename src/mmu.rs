@@ -119,7 +119,7 @@ pub(super) enum Error {
     BadPointer,
 }
 
-/// We start with basic page and frame types.
+// We start with basic page and frame types.
 
 /// Traits common to page frame numbers.  PFNs of different
 /// sizes represent aligned frames of physical address space.
@@ -1216,6 +1216,7 @@ mod arena {
     use super::{Error, Table};
     use crate::allocator::BumpAlloc;
     use alloc::alloc::{AllocError, Allocator, Layout};
+    use core::cell::SyncUnsafeCell;
     use core::ptr;
     use static_assertions::const_assert;
 
@@ -1226,8 +1227,10 @@ mod arena {
     // See RFD215 for details.
     const_assert!(PAGE_ARENA_SIZE > 16 * PAGE_SIZE);
 
-    static mut PAGE_ALLOCATOR: BumpAlloc<{ PAGE_ARENA_SIZE }> =
-        BumpAlloc::new([0; PAGE_ARENA_SIZE]);
+    unsafe impl Sync for BumpAlloc<{ PAGE_ARENA_SIZE }> {}
+
+    static PAGE_ALLOCATOR: SyncUnsafeCell<BumpAlloc<{ PAGE_ARENA_SIZE }>> =
+        SyncUnsafeCell::new(BumpAlloc::new([0; PAGE_ARENA_SIZE]));
 
     /// An allocator specialized for MMU page allocations.
     ///
@@ -1242,11 +1245,12 @@ mod arena {
         pub(super) fn try_with_addr<T: Table>(
             addr: usize,
         ) -> Result<*mut T, Error> {
-            let base = unsafe { PAGE_ALLOCATOR.base() };
-            let range = unsafe { PAGE_ALLOCATOR.addr_range() };
+            let page_allocator = unsafe { &*PAGE_ALLOCATOR.get() };
+            let range = page_allocator.addr_range();
             if !range.contains(&addr) {
                 return Err(Error::BadPointer);
             }
+            let base = page_allocator.base();
             let ptr = base.with_addr(addr);
             if !ptr.is_aligned_to(core::mem::align_of::<T>()) {
                 return Err(Error::BadPointer);
@@ -1264,7 +1268,8 @@ mod arena {
             let size = layout.size();
             assert_eq!(align, PAGE_SIZE);
             assert_eq!(size, PAGE_SIZE);
-            let a = unsafe { PAGE_ALLOCATOR.alloc_bytes(align, size) };
+            let page_allocator = unsafe { &*PAGE_ALLOCATOR.get() };
+            let a = page_allocator.alloc_bytes(align, size);
             let p = a.ok_or(AllocError)?;
             Ok(p.into())
         }
