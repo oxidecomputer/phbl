@@ -22,7 +22,7 @@ mod uart;
 type Result<T> = core::result::Result<T, &'static str>;
 
 /// The main entry point, called from assembler.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub(crate) extern "C" fn entry(config: &mut phbl::Config) {
     println!();
     println!("Oxide Pico Host Boot Loader");
@@ -41,10 +41,10 @@ pub(crate) extern "C" fn entry(config: &mut phbl::Config) {
 /// is compiled into the loader image.  Returns a slice around
 /// the ramdisk contents.
 fn expand_ramdisk() -> &'static [u8] {
+    use miniz_oxide::inflate::TINFLStatus;
+    use miniz_oxide::inflate::core::DecompressorOxide;
     use miniz_oxide::inflate::core::decompress;
     use miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER;
-    use miniz_oxide::inflate::core::DecompressorOxide;
-    use miniz_oxide::inflate::TINFLStatus;
 
     #[cfg(target_os = "none")]
     let cpio = include_bytes!(env!("PHBL_PHASE1_COMPRESSED_CPIO_ARCHIVE_PATH"));

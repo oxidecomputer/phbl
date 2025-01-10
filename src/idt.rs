@@ -13,7 +13,7 @@ use seq_macro::seq;
 
 /// Returns the selector for the 64-bit code segment in the GDT.
 fn code64() -> u16 {
-    extern "C" {
+    unsafe extern "C" {
         static GDT_CODE64: [u8; 0]; // The selector as an absolute symbol.
     }
     unsafe { GDT_CODE64.as_ptr() as u16 }
@@ -117,7 +117,7 @@ macro_rules! gen_stub {
     };
     ($name:ident, $vecnum:expr, err) => {
         #[naked]
-        extern "C" fn $name() -> ! {
+        unsafe extern "C" fn $name() -> ! {
             unsafe {
                 naked_asm!("pushq ${}; jmp {}",
                     const $vecnum, sym alltraps,
@@ -288,7 +288,7 @@ extern "C" fn trap(frame: &mut TrapFrame) {
 /// Be sure to call this with something you are fairly certain
 /// is a valid stack frame that does not alias the current stack.
 unsafe fn backtrace(mut rbp: u64) {
-    extern "C" {
+    unsafe extern "C" {
         static stack: [u8; 0];
         static STACK_SIZE: [u8; 0]; // Really the size, but an absolute symbol
     }

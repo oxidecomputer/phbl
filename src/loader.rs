@@ -7,14 +7,14 @@
 
 extern crate alloc;
 
+use crate::Result;
 use crate::mem;
 use crate::mmu::LoaderPageTable;
-use crate::Result;
 #[cfg(not(any(test, clippy)))]
 use alloc::vec::Vec;
 use goblin::container::{Container, Ctx, Endian};
-use goblin::elf::program_header::PT_LOAD;
 use goblin::elf::ProgramHeader;
+use goblin::elf::program_header::PT_LOAD;
 use goblin::elf::{self, Elf};
 
 type Thunk = unsafe extern "C" fn(
@@ -139,7 +139,7 @@ fn load_segment(
         let dst = unsafe {
             page_table
                 .map_region(region.clone(), mem::Attrs::new_data(), pa)
-                .expect("mapped region {region:#x?} read-write");
+                .expect("mapped region read-write");
             let p = page_table.try_with_addr(start.addr()).unwrap();
             let len = end.addr() - start.addr();
             core::ptr::write_bytes(p, 0, len);
@@ -158,7 +158,7 @@ fn load_segment(
     unsafe {
         page_table
             .map_region(region, attrs, pa)
-            .expect("remapped region {region:#x?} with attrs {attrs:?}");
+            .expect("remapped region with attrs");
     }
     Ok(())
 }
