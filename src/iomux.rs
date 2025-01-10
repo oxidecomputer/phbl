@@ -22,12 +22,13 @@ enum GpioX {
 /// current address space.
 pub unsafe fn init() {
     if let Some(settings) = mux_settings() {
+        use core::ptr;
         const GPIO_BASE_ADDR: usize = 0xFED8_0000;
         const IOMUX_BASE_ADDR: usize = GPIO_BASE_ADDR + 0x0D00;
-        let iomux = IOMUX_BASE_ADDR as *mut u8;
+        let iomux = ptr::with_exposed_provenance_mut::<u8>(IOMUX_BASE_ADDR);
         for (pin, function) in settings.iter() {
             unsafe {
-                core::ptr::write_volatile(iomux.offset(*pin), *function as u8);
+                ptr::write_volatile(iomux.offset(*pin), *function as u8);
             }
         }
     }

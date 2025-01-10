@@ -77,7 +77,7 @@ impl fmt::Debug for Config {
 /// a LoaderPageTable that we can use to create new mappings for
 /// e.g. read and loading the host kernel.  This is called
 /// directly from assembler code.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn init(bist: u32) -> &'static mut Config {
     static INITED: AtomicBool = AtomicBool::new(false);
     if INITED.swap(true, Ordering::AcqRel) {
@@ -106,7 +106,7 @@ pub(crate) unsafe extern "C" fn init(bist: u32) -> &'static mut Config {
 }
 
 // Stubs for linker-provided symbols.
-extern "C" {
+unsafe extern "C" {
     static sbss: [u8; 0];
     static ebss: [u8; 0];
     static __sloader: [u8; 0];
