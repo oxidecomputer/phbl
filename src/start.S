@@ -43,8 +43,8 @@ GDT_CODE32 =		2 << 3
 GDT_DATA32 =		3 << 3
 .globl GDT_CODE64
 
-SEG_READ =		1 << 41
-SEG_WRITE =		1 << 42	// Only for data, not code segments.
+SEG_CODE_RO =		1 << 41	// Only for code, not data segments.
+SEG_DATA_RW =		1 << 41	// Only for data, not code segments.
 SEG_DATA =		0 << 43
 SEG_CODE =		1 << 43	// Code segments are read-only.
 SEG_PRESENT =		1 << 47
@@ -180,11 +180,11 @@ gdt:
 	// 0x0: Null segment.
 	.quad	0
 	// 0x8: 64-bit code segment.
-	.quad	(SEG_PRESENT + SEG_READ + SEG_CODE + SEG_LONG + SEG_MUSTBE1)
+	.quad	(SEG_PRESENT + SEG_CODE_RO + SEG_CODE + SEG_LONG + SEG_MUSTBE1)
 	// 0x10: 32-bit code segment.
-	.quad	(SEG_PRESENT + SEG_READ + SEG_CODE + SEG32 + SEG_MUSTBE1)
+	.quad	(SEG_PRESENT + SEG_CODE_RO + SEG_CODE + SEG32 + SEG_MUSTBE1)
 	// 0x18: 32-bit data segment.
-	.quad	(SEG_PRESENT + SEG_READ + SEG_WRITE + SEG32 + SEG_MUSTBE1)
+	.quad	(SEG_PRESENT + SEG_DATA_RW + SEG_DATA + SEG32 + SEG_MUSTBE1)
 egdt:
 
 .skip 6
