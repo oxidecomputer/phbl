@@ -49,10 +49,10 @@ fn mux_settings() -> Option<&'static [(isize, GpioX)]> {
         (0x19, 0xa0..=0xaf, 0x0..=0xf, Some(SP5)) | // Bergamo and Sienna
         (0x1a, 0x00..=0x1f, 0x0..=0xf, Some(SP5)) => { // Turin
             Some(&[
-                (135, GpioX::F0),
-                (136, GpioX::F0),
-                (137, GpioX::F0),
-                (138, GpioX::F0),
+                (135, GpioX::F0),  // UART0 CTS
+                (136, GpioX::F0),  // UART0 RXD
+                (137, GpioX::F0),  // UART0 RTS
+                (138, GpioX::F0),  // UART0 TXD
             ])
         },
         _ => None,
