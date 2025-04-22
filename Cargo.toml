@@ -1,11 +1,11 @@
+workspace = { members = ["xtask"] }
+
 [package]
 name = "phbl"
 authors = ["Oxide Computer Company"]
 version = "0.1.0"
 edition = "2024"
 license = "MPL-2.0"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 bit_field = "0.10"
