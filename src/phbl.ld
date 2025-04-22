@@ -42,7 +42,7 @@ SECTIONS {
 	/* Empty section to work around an LLD bug sizing .text. */
 	.empty ADDR(.text) : { } :empty
 
-	.bss ((ADDR(.text) - bsssize) & ~0xFFF) (NOLOAD) : {
+	.bss ((ADDR(.text) - bsssize) & ~0x1FFFFF) (NOLOAD) : {
 		sbss = .;
 		*(.bss* COMMON)
 		ebss = ALIGN(4096);
