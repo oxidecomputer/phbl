@@ -4,7 +4,6 @@
 
 #![feature(allocator_api)]
 #![feature(naked_functions)]
-#![feature(pointer_is_aligned_to)]
 #![feature(sync_unsafe_cell)]
 #![cfg_attr(not(any(test, clippy)), no_std)]
 #![cfg_attr(not(test), no_main)]
