@@ -36,6 +36,11 @@ impl<const SIZE: usize> BumpAlloc<SIZE> {
 
     /// Allocates a region of memory of the given alignment and
     /// size.
+    ///
+    /// Note that allocators are an explicit example of a use
+    /// case where the clippy `mut_from_ref` lint is known to
+    /// give false-positives.
+    #[allow(clippy::mut_from_ref)]
     pub(crate) fn alloc_bytes(
         &self,
         align: usize,
