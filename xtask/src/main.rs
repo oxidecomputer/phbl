@@ -30,6 +30,8 @@ enum Command {
         profile: BuildProfile,
         #[clap(flatten)]
         locked: Locked,
+        #[clap(long)]
+        target_dir: Option<PathBuf>,
 
         /// Path to compressed CPIO archive
         #[clap(long)]
@@ -113,8 +115,8 @@ impl Locked {
 fn main() {
     let xtask = Xtask::parse();
     match xtask.cmd {
-        Command::Build { profile, locked, cpioz } => {
-            build(profile, locked, cpioz)
+        Command::Build { profile, target_dir, locked, cpioz } => {
+            build(profile, target_dir, locked, cpioz)
         }
         Command::Test { profile, locked } => test(profile, locked),
         Command::Disasm { profile, locked, source, cpioz } => {
@@ -127,16 +129,24 @@ fn main() {
 }
 
 /// Runs a cross-compiled build.
-fn build(profile: BuildProfile, locked: Locked, cpioz: PathBuf) {
+fn build(
+    profile: BuildProfile,
+    target_dir: Option<PathBuf>,
+    locked: Locked,
+    cpioz: PathBuf,
+) {
     std::env::set_var("PHBL_PHASE1_COMPRESSED_CPIO_ARCHIVE_PATH", cpioz);
     let profile = profile.to_str();
     let locked = locked.to_str();
+    let target_dir = target_dir.unwrap_or("target".into());
+    let target_dir = target_dir.display();
     let target = target();
     let args = format!(
         "build {profile} {locked} \
             -Z build-std=core,alloc \
             -Z build-std-features=compiler-builtins-mem \
-            --target {target}.json"
+            --target {target}.json \
+            --target-dir {target_dir}"
     );
     cmd(cargo(), args.split_whitespace()).run().expect("build successful");
 }
@@ -151,7 +161,8 @@ fn test(profile: BuildProfile, locked: Locked) {
 
 /// Build and disassemble the phbl binary.
 fn disasm(profile: BuildProfile, locked: Locked, source: bool, cpioz: PathBuf) {
-    build(profile.clone(), locked, cpioz);
+    let target_dir = None;
+    build(profile.clone(), target_dir, locked, cpioz);
     let triple = target();
     let profile_dir = profile.dir().to_str().unwrap();
     let flags = source.then_some("-S").unwrap_or("");
