@@ -48,7 +48,7 @@ pub(crate) fn load(
 }
 
 /// Parses the ELF executable contained in the given byte slice.
-fn parse_elf(bytes: &[u8]) -> Result<Elf> {
+fn parse_elf(bytes: &[u8]) -> Result<Elf<'_>> {
     let header = parse_header(bytes)?;
     let mut elf = Elf::lazy_parse(header).map_err(|_| "parsed ELF binary")?;
     elf.program_headers = parse_program_headers(bytes, header)?;
