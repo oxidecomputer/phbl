@@ -118,14 +118,14 @@ fn load_segment(
     bytes: &[u8],
 ) -> Result<()> {
     let pa = section.p_paddr;
-    if pa % mem::P4KA::ALIGN != 0 {
+    if !pa.is_multiple_of(mem::P4KA::ALIGN) {
         return Err("Program section is not physically 4KiB aligned");
     }
     let vm = section.vm_range();
     if vm.contains(&mem::LOW_CANON_SUP) || vm.contains(&mem::HI_CANON_INF) {
         return Err("Program section is not canonical");
     }
-    if vm.start % mem::V4KA::ALIGN != 0 {
+    if !vm.start.is_multiple_of(mem::V4KA::ALIGN) {
         return Err("Program section not virtually 4KiB aligned");
     }
     if vm.end <= vm.start {

@@ -858,24 +858,24 @@ impl PageTable {
         while start != end {
             let attrs = region.attrs();
             let len = if end.wrapping_sub(start) >= PFN1G::SIZE
-                && start % PFN1G::SIZE == 0
-                && (pa as usize) % PFN1G::SIZE == 0
+                && start.is_multiple_of(PFN1G::SIZE)
+                && (pa as usize).is_multiple_of(PFN1G::SIZE)
             {
                 unsafe {
                     self.map(Page1G::new(start), PFN1G::new(pa), attrs);
                 }
                 PFN1G::SIZE
             } else if end.wrapping_sub(start) >= PFN2M::SIZE
-                && start % PFN2M::SIZE == 0
-                && (pa as usize) % PFN2M::SIZE == 0
+                && start.is_multiple_of(PFN2M::SIZE)
+                && (pa as usize).is_multiple_of(PFN2M::SIZE)
             {
                 unsafe {
                     self.map(Page2M::new(start), PFN2M::new(pa), attrs);
                 }
                 PFN2M::SIZE
             } else if end.wrapping_sub(start) >= PFN4K::SIZE
-                && start % PFN4K::SIZE == 0
-                && (pa as usize) % PFN4K::SIZE == 0
+                && start.is_multiple_of(PFN4K::SIZE)
+                && (pa as usize).is_multiple_of(PFN4K::SIZE)
             {
                 unsafe {
                     self.map(Page4K::new(start), PFN4K::new(pa), attrs);

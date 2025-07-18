@@ -193,9 +193,8 @@ pub(crate) fn ramdisk_region_init_mut() -> &'static mut [u8] {
     let ecpio = saddr().addr();
     const PHBL_MIN: usize = 2 * mem::GIB - 256 * mem::MIB;
     assert!(PHBL_MIN < cpio && cpio < ecpio);
-    const PHBL_BASE: *mut u8 = core::ptr::without_provenance_mut(PHBL_MIN);
     let len = ecpio - cpio;
-    let cpio = PHBL_BASE.with_addr(cpio);
+    let cpio = core::ptr::with_exposed_provenance_mut::<u8>(cpio);
     unsafe {
         core::ptr::write_bytes(cpio, 0, len);
         core::slice::from_raw_parts_mut(cpio, len)
