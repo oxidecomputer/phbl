@@ -143,6 +143,7 @@ fn build(
     let target = target();
     let args = format!(
         "build {profile} {locked} \
+            -Z json-target-spec \
             -Z build-std=core,alloc \
             -Z build-std-features=compiler-builtins-mem \
             --target {target}.json \
