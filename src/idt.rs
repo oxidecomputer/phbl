@@ -272,7 +272,7 @@ extern "C" fn trap(frame: &mut TrapFrame) {
     // Arrange for the exception return to land in a halt loop.
     // The seemingly superfluous cast to usize and then again to
     // u64 keeps clippy happy.
-    frame.rip = crate::phbl::dnr as usize as u64;
+    frame.rip = crate::phbl::dnr as *const () as usize as u64;
 }
 
 /// Prints a call backtrace starting from the given frame
