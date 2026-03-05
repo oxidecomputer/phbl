@@ -46,3 +46,15 @@ static GDT_CODE64: usize = 0x28;
 pub unsafe extern "C" fn dnr() {
     loop {}
 }
+/// Also defined in assembly.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn supertramp(
+    _: u64,
+    _: u64,
+    _: u64,
+    _: u64,
+    _: u64,
+    _: u64,
+    _: u64,
+) {
+}
