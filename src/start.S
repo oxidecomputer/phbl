@@ -60,6 +60,12 @@ SEG32 =			(SEG32_DEFAULT + SEG32_GRANULARITY + SEG32_BOUNDS)
 
 SEG16_MASK =		0xFFFF
 
+// Debug-related configuration and data.
+DEBUG_PORT =		0x80
+DEBUG_HELLO =		0x1de90001
+DEBUG_CALL =		0x1de9ca11
+DEBUG_HALTED =		0x1de9dead
+
 // Stack configuration.
 STACK_SIZE =		8 * PAGE_SIZE
 .globl STACK_SIZE
@@ -92,6 +98,10 @@ reset:
 start:
 	// Save the BIST data.
 	movl	%eax, %ebp
+
+	// Say hello.
+	movl	$DEBUG_HELLO, %eax
+	outl	%eax, $DEBUG_PORT
 
 	// Coming out of reset, caching and write-back are
 	// disabled.  Clear the cache-inhibiting bits in %cr0
@@ -231,10 +241,50 @@ start64:
 .balign 64
 .globl dnr
 dnr:
+	movl	$DEBUG_HALTED, %eax
+	outl	%eax, $DEBUG_PORT
 	cli
 	hlt
 	jmp	dnr
 	ud2
+
+// Makes an (indirect) call equivalent to a `jmp`.
+//
+// Rust calls this with the signature:
+//
+// unsafe extern "C" fn supertramp(
+//     rdi: u64, rsi: u64, rdx: u64, rcx: u64, r8: u64, r9: u64, thunk: u64);
+//
+// According to the ABI, the `thunk` argument will be passed on the
+// stack, and will be the first thing at the bottom just before calling
+// `supertramp`.  The `callq` will push the return value immediately
+// below that.  Thus, on entry, the the six argument registers will have
+// whatever contents the caller specified, and the bottom two words of the
+// stack will be:
+//
+// * 8(%rsp) -- thunk address
+// * 0(%rsp) -- %rip for ret
+//
+// We want to invoke the given thunk with the existing contents of the
+// argument registers, and at the same time, remove `supertramp` from
+// the call stack: return should be to `supertramp`s caller.  To do so,
+// we simply push another copy of the thunk address onto the stack,
+// immediately below the return address from the call to `supertramp`
+// and `ret`, which effectively pops the address we just pushed and
+// jumps to the thunk, leaving the return address from the `call` to
+// us at the bottom of the stack; a subsequent `ret` thus returns to
+// our caller directly.
+//
+// As a side-effect before jumping, outputs a message to the debug port
+// indicating that we are calling the thunk.
+.balign 16
+.globl supertramp
+supertramp:
+	movl	$DEBUG_CALL, %eax
+	outl	%eax, $DEBUG_PORT
+	movq	8(%rsp), %rax
+	pushq	%rax
+	ret
 
 // The rodata section contains space for the early page tables.
 // We leave assembler with an identity mapping for the second

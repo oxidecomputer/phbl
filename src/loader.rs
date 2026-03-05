@@ -18,12 +18,12 @@ use goblin::elf::program_header::PT_LOAD;
 use goblin::elf::{self, Elf};
 
 type Thunk = unsafe extern "C" fn(
-    ramdisk_paddr: u64,
-    ramdisk_len: usize,
-    _rdx: u64,
-    _rcx: u64,
-    _r8: u64,
-    _r9: u64,
+    rdi: u64,
+    rsi: u64,
+    rdx: u64,
+    rcx: u64,
+    r8: u64,
+    r9: u64,
 );
 
 /// Loads an executable image contained in the given byte slice,
@@ -43,7 +43,18 @@ pub(crate) fn load(
     }
     let entry = unsafe { core::mem::transmute::<u64, Thunk>(elf.entry) };
     Ok(move |ramdisk_paddr: u64, ramdisk_len: usize| unsafe {
-        entry(ramdisk_paddr, ramdisk_len, 0, 0, 0, 0)
+        unsafe extern "C" {
+            fn supertramp(
+                rdi: u64,
+                rsi: u64,
+                rdx: u64,
+                rcx: u64,
+                r8: u64,
+                r9: u64,
+                thunk: Thunk,
+            );
+        }
+        supertramp(ramdisk_paddr, ramdisk_len as u64, 0, 0, 0, 0, entry)
     })
 }
 
