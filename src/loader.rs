@@ -152,7 +152,7 @@ fn load_segment(
                 .map_region(region.clone(), mem::Attrs::new_data(), pa)
                 .expect("mapped region read-write");
             let p = page_table.try_with_addr(start.addr()).unwrap();
-            let len = end.addr() - start.addr();
+            let len = end.addr().wrapping_sub(start.addr());
             core::ptr::write_bytes(p, 0, len);
             core::slice::from_raw_parts_mut(p, len)
         };
