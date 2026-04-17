@@ -34,12 +34,12 @@ pub(crate) fn load(
     bytes: &[u8],
 ) -> Result<impl FnOnce(u64, usize)> {
     let elf = parse_elf(bytes)?;
-    for section in elf.program_headers.iter().filter(|&h| h.p_type == PT_LOAD) {
-        let file_range = section.file_range();
+    for segment in elf.program_headers.iter().filter(|&h| h.p_type == PT_LOAD) {
+        let file_range = segment.file_range();
         if bytes.len() < file_range.end {
             return Err("load: truncated executable");
         }
-        load_segment(page_table, section, &bytes[file_range])?;
+        load_segment(page_table, segment, &bytes[file_range])?;
     }
     let entry = unsafe { core::mem::transmute::<u64, Thunk>(elf.entry) };
     Ok(move |ramdisk_paddr: u64, ramdisk_len: usize| unsafe {
@@ -125,22 +125,22 @@ fn parse_program_headers(
 /// it as required.
 fn load_segment(
     page_table: &mut LoaderPageTable,
-    section: &ProgramHeader,
+    segment: &ProgramHeader,
     bytes: &[u8],
 ) -> Result<()> {
-    let pa = section.p_paddr;
+    let pa = segment.p_paddr;
     if !pa.is_multiple_of(mem::P4KA::ALIGN) {
-        return Err("Program section is not physically 4KiB aligned");
+        return Err("Program segment is not physically 4KiB aligned");
     }
-    let vm = section.vm_range();
+    let vm = segment.vm_range();
     if vm.contains(&mem::LOW_CANON_SUP) || vm.contains(&mem::HI_CANON_INF) {
-        return Err("Program section is not canonical");
+        return Err("Program segment is not canonical");
     }
     if !vm.start.is_multiple_of(mem::V4KA::ALIGN) {
-        return Err("Program section not virtually 4KiB aligned");
+        return Err("Program segment not virtually 4KiB aligned");
     }
     if vm.end <= vm.start {
-        return Err("Program section ends before start or is empty");
+        return Err("Program segment ends before start or is empty");
     }
     let start = mem::V4KA::new(vm.start);
     let end = mem::V4KA::new(round_up_4k(vm.end));
@@ -162,9 +162,9 @@ fn load_segment(
         }
     }
     let attrs = mem::Attrs::new_kernel(
-        section.is_read(),
-        section.is_write(),
-        section.is_executable(),
+        segment.is_read(),
+        segment.is_write(),
+        segment.is_executable(),
     );
     unsafe {
         page_table
