@@ -49,7 +49,7 @@ impl<const SIZE: usize> BumpAlloc<SIZE> {
         let heap = self.base();
         let mut pos = 0;
         self.offset
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |offset| {
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |offset| {
                 let current = unsafe { heap.add(offset) };
                 let adjust = current.align_offset(align);
                 pos = offset.checked_add(adjust).expect("alignment overflow");
